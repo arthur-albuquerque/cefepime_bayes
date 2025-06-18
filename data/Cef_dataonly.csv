@@ -1,0 +1,126 @@
+﻿Covidence ID,Study ID,Patient population,Sponsor,Intended clinical indication,Comparator,Comparator group,death_cef,N_cef,deaths_com,N_com,Dose Cefepime,Frequency Cefepime,Cefepime_q8h,Cefepime_q12,cef_doseper24h
+4,Bao 2001,Adults,Published,Pneumonia,Cefotaxime ,Cefotaxime/Ceftriaxone,NA,NA,NA,NA,1 g,q 12 h,Low,Low,2
+19,Huang 2005,Pediatrics,Published,Pneumonia,Cefoperazone/sulbactam,Cefoperazone/sulbactam,0,50,0,50,,,NA,NA,
+56,Paladino 2007,Adults,Published,Pneumonia,Ceftriaxone,Cefotaxime/Ceftriaxone,2,32,3,29,1 g,24 h,Low,Low,1
+315,Biron 1998,Adults,Published,Febrile neutropenia,Imipenem,Carbapenem,10,200,4,195,2 g,q 12 h,Low,High,4
+330,Bohme 1998,Adults,Published,Febrile neutropenia,Piperacillin/tazobactam,Piperacillin-tazobactam,2,49,2,51,2 g,q 8 h,High,High,6
+455,Cordero 2001,Adults,Published,Pneumonia,Cefotaxime,Cefotaxime/Ceftriaxone,1,84,2,76,2 g,q 12h,Low,High,4
+576,Erman 2001,Adults,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,8,98,11,97,2 g,q 12 h,Low,High,4
+751,Hoepelman 1993,Adults,Published,Severe bacterial infections,Ceftazidime,Ceftazidime,32,173,26,175,2 g,q 12 h,Low,High,4
+883,Kebudi 2001,Pediatrics,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,0,32,0,31,150 mg/kg/d,q 8 h,NA,NA,
+1001,Leophonte 1993,Adults,Published,Pneumonia,Ceftazidime,Ceftazidime,7,87,4,44,1 g,q 12 h,Low,Low,2
+1028,Lin 2001,Adults,Published,Pneumonia,Ceftazidime,Ceftazidime,2,41,0,20,1-2 g,q 12 h,Low,Low,3
+1199,Mustafa 2001,Pediatrics,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,2,49,0,55,50 mg/kg/dose,q 8 h,NA,NA,
+1246,Oguz 2006,Pediatrics,Published,Febrile neutropenia,Meropenem,Carbapenem,0,32,0,33,150 mg/ kg/ day,q 8 h,NA,NA,
+1339,Raad 2003,Adults,Published,Febrile neutropenia,Imipenem,Carbapenem,7,127,5,124,2 g,q 8 h,High,High,6
+1344,Ramphal 1997,Adults,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,6,45,4,45,2 g,q 8 h,High,High,6
+1409,Saez-Llorens 1995,Pediatrics,Published,Meningitis,Cefotaxime/Ceftriaxone,Cefotaxime/Ceftriaxone,2,43,4,47,50 mg/kg,q 8 h,NA,NA,
+1410,Saez-Llorens 2001,Pediatrics,Published,Meningitis,Cefotaxime/Ceftriaxone,Cefotaxime/Ceftriaxone,10,174,9,171,50mg/kg/day,q8h,NA,NA,
+1413,Saito 1992b,Adults,Published,Pneumonia,Ceftazidime,Ceftazidime,0,83,0,87,1g,q 12 h,Low,Low,2
+1414,Saito 1992a,Adults,Published,Pneumonia,Ceftazidime,Ceftazidime,2,94,1,89,1 g,q 12 h,Low,Low,2
+1432,Schaad 1998,Pediatrics,Published,UTI,Ceftazidime,Ceftazidime,0,149,0,150,50 mg/kg,q 8 h,NA,NA,
+1437,Schrank 1995,Adults,Published,Severe bacterial infections,Ceftazidime,Ceftazidime,1,13,2,15,2 g,q 8 h,High,High,6
+1550,Tamura 2002,Adults,Published,Febrile neutropenia,"Carbapenem (imipenem, panipenem, or meropenem)",Carbapenem,2,42,1,41,1-2 g,q 12 h,Low,Low,3
+1736,Zervos 1998,Adults,Published,Pneumonia,Ceftriaxone,Cefotaxime/Ceftriaxone,3,59,1,56,2 g,q 12 h,Low,High,4
+2134,Beaucaire 1999,Adults,Published,Pneumonia,Ceftazidime,Ceftazidime,29,141,21,134,2 g,q 12 h,Low,High,4
+2440,Aamir 2016,Pediatrics,Published,Febrile neutropenia,Piperacillin-tazobactam,Piperacillin-tazobactam,2,20,4,20,50mg/kg,q8h,NA,NA,
+2497,Aufiero 1997,Adults,Published,Pneumonia,Ceftazidime,Ceftazidime,3,57,0,29,1g,q 12 h,Low,Low,2
+2537,Barckow 1993,Adults,Published,Pneumonia,Cefotaxime ,Cefotaxime/Ceftriaxone,13,41,4,21,2 g,q 12 h,Low,High,4
+2584,Bonfitto 1999,Adults,Published,Pneumonia,Ceftazidime,Ceftazidime,0,74,0,66,2 g,q 12 h,Low,High,4
+2593,Bow 2006,Adults,Published,Febrile neutropenia,Piperacillin-tazobactam,Piperacillin-tazobactam,15,263,8,265,2 g,q 8 h,High,High,6
+2597,Bradley 2019,Pediatrics,Published,UTI,Ceftazidime-avibactam,Ceftazidime-avibactam,0,23,0,54,2 g,q 8 h,High,High,6
+2642,Chandrasekar 2000,Adults,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,22,143,10,133,2 g,q 8 h,High,High,6
+2645,Chang 1998,Adults,Published,Severe bacterial infections,Ceftazidime,Ceftazidime,0,20,0,16,2 g,q 12 h,Low,High,4
+2664,Cherif 2004,Adults,Published,Febrile neutropenia,Imipenem,Carbapenem,5,105,5,102,2 g,q 8 h,High,High,6
+2672,Chuang 2002,Pediatrics,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,3,48,2,48,50 mg/kg/dose,BID or TID,NA,NA,
+2689,Corapcioglu 2006,Pediatrics,Published,Febrile neutropenia,Piperacillin-Tazobactam,Piperacillin-tazobactam,NA,NA,NA,NA,50 mg/kg,q 8 h,NA,NA,
+2691,Cordonnier 1997,Adults,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,13,242,4,111,2 g,q 12 h,Low,High,4
+2692,Cornely 2002,Adults,Published,Febrile neutropenia,Ceftriaxone,Cefotaxime/Ceftriaxone,1,100,2,107,2 g,q 8 h,High,High,6
+2763,Edelstein 1991,Adults,Published,Pneumonia,Ceftazidime,Ceftazidime,3,43,0,22,1 g,q 12 h,Low,Low,2
+2804,Fujita 2016,Adults,Published,Febrile neutropenia,Meropenem,Carbapenem,0,21,1,24,2 g,q 12 h,Low,High,4
+2824,Gentry 1991,Adults,Published,Mixed,Ceftazidime,Ceftazidime,1,59,2,53,2 g,q 12 h,Low,High,4
+2829,Ghalaut 2007,Adults,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,2,20,1,20,1-2 g,q 8 h,Low,NA,4.5
+2846,Gomez 2010,Adults,Published,Febrile neutropenia,Piperacillin-Tazobactam,Piperacillin-tazobactam,15,152,17,165,2 g,q 12 h,Low,High,4
+2861,Grossman 1999,Adults,Published,Pneumonia,Ceftriaxone,Cefotaxime/Ceftriaxone,7,76,7,75,2 g,q 12 h,Low,High,4
+2918,Holloway 1996,Adults,Published,Severe bacterial infections,Ceftazidime,Ceftazidime,35,421,22,419,2 g,q 12 h,Low,High,4
+2933,Huang 2002,Adults,Published,Severe bacterial infections,Ceftazidime ,Ceftazidime,2,26,0,26,2 g,q 12 h,Low,High,4
+2976,Jindal 2016,Adults,Published,Mixed,Imipenem,Carbapenem,22,88,22,87,2 g,q 12 h,Low,High,4
+3031,Kieft 1994,Adults,Published,Severe bacterial infections,Ceftazidime,Ceftazidime,4,69,4,64,2 g,q 12 h,Low,High,4
+3069,Kutluk 2004,Pediatrics,Published,Febrile neutropenia,Meropenem,Carbapenem,1,25,1,24,150 mg/kg/day,q 8 h,NA,NA,
+3070,Kwon 2008,Adults,Published,Febrile neutropenia,Panipenem/betamipron,Carbapenem,1,61,2,55,2 g,q 12 h,Low,High,4
+3090,Lee 2018,Adults,Published,Pneumonia,Piperacillin-tazobactam,Piperacillin-tazobactam,3,21,4,22,,,NA,NA,
+3118,Liu 2019,Adults,Published,Pneumonia,Cefoperazone/sulbactam,Cefoperazone/sulbactam,2,87,7,79,2 g,q 12 h,Low,High,4
+3124,Liu 2014,Adults,Published,Severe bacterial infections,Cefoselis,Cefoselis,NA,NA,NA,NA,1-2 g,q 12 h,Low,Low,3
+3232,Naseem 2011,Adults,Published,Febrile neutropenia,Ticarcilline/clavulanate,Ticarcilline/clavulanate,0,55,1,53,2 g,q 8 h,High,High,6
+3240,Newton 1993,Adults,Published,Mixed,Cefotaxime,Cefotaxime/Ceftriaxone,0,159,0,72,2 g,q 12 h,Low,High,4
+3254,Oi 2020,Adults,Published,Pneumonia,Meropenem,Carbapenem,12,101,7,86,1 g,q 8 h,Low,Low,3
+3333,Ponce-de-Leon 1999,Adults,Published,Severe bacterial infections,Ceftazidime,Ceftazidime,1,25,2,25,2 g,q 12 h,Low,High,4
+3337,Preheim 1995,Adults,Published,UTI,Ceftazidime,Ceftazidime,1,39,0,41,500 mg,q 12 h,Low,Low,
+3407,Sano 2015,Pediatrics,Published,Febrile neutropenia,Piperacillin-Tazobactam,Piperacillin-tazobactam,NA,NA,NA,NA,100 mg/kg/day,q 6 h,NA,NA,
+3408,Sanz 2002,Adults,Published,Febrile neutropenia,Piperacillin-tazobactam,Piperacillin-tazobactam,19,432,27,435,2 g,q 8 h,High,High,6
+3411,Sarashina 2014,Pediatrics,Published,Febrile neutropenia,Cefozopran,Cefozopran,0,112,0,111,100 mg/kg/day,divided into 4 doses,NA,NA,
+3435,Shahid 2008/CPM4495001,Pediatrics,Published,Pneumonia,Ceftazidime,Ceftazidime,0,15,3,15,50 mg/kg,q 12 h,NA,NA,
+3438,Sharifi 1996,Adults,Published,UTI,Ceftazidime,Ceftazidime,12,118,7,62,500 mg,q 12 h,Low,Low,
+3506,Talaie 2008,Adults,Published,Pneumonia,Ceftriaxone,Cefotaxime/Ceftriaxone,5,70,6,70,1 g,q 12 h,Low,Low,2
+3578,Uygun 2009,Pediatrics,Published,Febrile neutropenia,Piperacillin-Tazobactam,Piperacillin-tazobactam,1,62,2,65,50 mg/kg,q 8 h,NA,NA,
+3605,Wang 1999,Adults,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,0,19,2,22,2 g,q 8 h,High,High,6
+3607,Wang 2017,Adults,Published,Pneumonia,Cefoperazone/sulbactam,Cefoperazone/sulbactam,NA,NA,NA,NA,,,NA,NA,
+3624,Willis 1998,Adults,Published,Pneumonia,Cefotaxime,Cefotaxime/Ceftriaxone,5,54,2,55,2 g,q 12 h,Low,High,4
+3647,Xu 2010,Adults,Published,Severe bacterial infections,Cefoselis,Cefoselis,NA,NA,NA,NA,1-2g,q 12 h,Low,Low,3
+3651,Yakovlev 2006,Adults,Published,Pneumonia,Ertapenem,Carbapenem,20,146,21,144,2 g,q 12 h,Low,High,4
+3688,Zanetti 2003,Adults,Published,Pneumonia,Imipenem,Carbapenem,28,108,19,101,2 g,q 8 h,High,High,6
+4110,Cannavino 2015,Pediatrics,Published,Mixed,Doripenem,Carbapenem,0,12,0,35,50 mg/kg,q 8 h,NA,NA,
+1446_1,Seo 2017b,Adults,Published,UTI,Ertapenem,Carbapenem,2,6,2,33,2 g,q 12 h,Low,High,4
+1446_2,Seo 2017a,Adults,Published,UTI,Piperacillin-Tazobactam,Piperacillin-tazobactam,2,6,2,33,2 g,q 12 h,Low,High,4
+3167_1,McCabe 1996b,Adults,Published,Pneumonia,Ceftazidime,Ceftazidime,17,225,11,111,1 g,q 12 h,Low,Low,2
+3167_2,McCabe 1996a,Adults,Published,Pneumonia,Ceftazidime,Ceftazidime,4,65,3,34,1 g,q 12 h,Low,Low,2
+3225_1,Nakagawa 2013,Adults,Published,Febrile neutropenia,Panipenem-betamipron,Carbapenem,NA,NA,NA,NA,2 g,q 12 h,Low,High,4
+3225_2,Nakagawa 2013,Adults,Published,Febrile neutropenia,Meropenem,Carbapenem,NA,NA,NA,NA,2 g,q 12 h,Low,High,4
+3228_1,Nakane 2015a,Adults,Published,Febrile neutropenia,Cefozopran,Cefozopran,4,87,6,87,2 g,q 12 h,Low,High,4
+3228_2,Nakane 2015b,Adults,Published,Febrile neutropenia,Imipenem or Meropenem,Carbapenem,4,87,2,181,2 g,q 12 h,Low,High,4
+A04,Atay 2004,Pediatrics,Published,Febrile neutropenia,Meropenem,Carbapenem,0,21,0,23,150 mg/kg/day,q 8 h,NA,NA,
+A19,Aviles-Robles 2019,Pediatrics,Published,Febrile neutropenia,Cefixime,Cefixime,0,57,0,60,150 mg/kg/day,,NA,NA,
+A97,Aoun 1997,Adults,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,5,54,3,57,2 g,q 8 h,High,High,6
+B97,Breen 1997,Adults,Published,Febrile neutropenia,Ceftazidime ,Ceftazidime ,36,327,23,320,2 g,q 8 h,High,High,6
+C01,Cornely 2001,Adults,Published,Febrile neutropenia,Meropenem,Carbapenem,8,202,10,202,2 g,q 12 h,Low,High,4
+G01,Gomez 2001,Adults,Published,Febrile neutropenia,Piperacillin-Tazobactam,Piperacillin-tazobactam,13,86,5,100,2 g,q 8 h,High,High,6
+G92,Gentry 1992,Adults,Published,Mixed,Ceftazidime or cefotaxime,Ceftazidime,0,23,0,10,,,NA,NA,
+G97,Glauser 1997,Adults,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,8,139,9,142,2 g,q 8 h,High,High,6
+J03,Jiang 2003,Adults,Published,Pneumonia,Ceftazidime,Ceftazidime,0,30,0,30,1-2 g ,q 12 h,Low,Low,3
+J98,Jehn 1998,Adults,Published,Febrile neutropenia,Ceftazidime,Ceftazidime,2,58,1,52,2 g,q 12 h,Low,High,4
+M97,Mallet 1997,Adults,Published,Meningitis,Cefotaxime,Cefotaxime/Ceftriaxone,0,31,0,26,50 mg/kg,q 8 h,NA,NA,
+OR96,O'Ryan 1996,Pediatrics,Published,Meningitis,Ceftriaxone,Cefotaxime/Ceftriaxone,7,103,5,105,50 mg/kg,q 8 h,NA,NA,
+Q23,Qian 2023,Adults,Published,Severe bacterial infections,Piperacillin-Tazobactam,Piperacillin-tazobactam,104,1214,106,1297,2 g,q 8 h,High,High,6
+S96,Schwartz 1996,Adults,Published,Mixed,Ceftazidime,Ceftazidime,5,231,0,115,1 g ,q 12 h,Low,Low,2
+Sponsor1,Al411056,,Sponsor,,Control,Comparator,0,37,0,37,,,NA,NA,
+Sponsor10,Al411137,,Sponsor,,Control,Comparator,0,35,1,36,,,NA,NA,
+Sponsor11,Al411149,,Sponsor,,Control,Comparator,0,50,0,24,,,NA,NA,
+Sponsor12,Al411154,,Sponsor,,Control,Comparator,0,16,0,16,,,NA,NA,
+Sponsor13,Al411157,,Sponsor,,Control,Comparator,0,22,0,12,,,NA,NA,
+Sponsor14,Al411169,,Sponsor,,Control,Comparator,1,119,0,123,,,NA,NA,
+Sponsor15,Al411179,,Sponsor,,Control,Comparator,3,34,0,17,,,NA,NA,
+Sponsor16,Al411184,,Sponsor,,Control,Comparator,3,35,2,36,,,NA,NA,
+Sponsor17,Al411196,,Sponsor,,Control,Comparator,10,59,13,61,,,NA,NA,
+Sponsor18,Al411205,,Sponsor,,Control,Comparator,8,85,12,82,,,NA,NA,
+Sponsor19,Al411206,,Sponsor,,Control,Comparator,4,32,4,31,,,NA,NA,
+Sponsor2,Al411070,,Sponsor,,Control,Comparator,26,387,16,194,,,NA,NA,
+Sponsor20,Al411213,,Sponsor,,Control,Comparator,0,181,1,181,,,NA,NA,
+Sponsor21,Al411219,,Sponsor,,Control,Comparator,41,181,44,185,,,NA,NA,
+Sponsor22,Al411222,,Sponsor,,Control,Comparator,1,16,3,19,,,NA,NA,
+Sponsor23,Al411228,,Sponsor,,Control,Comparator,12,82,25,76,,,NA,NA,
+Sponsor24,Al411230,,Sponsor,,Control,Comparator,3,307,4,308,,,NA,NA,
+Sponsor25,Al411242,,Sponsor,,Control,Comparator,8,76,11,68,,,NA,NA,
+Sponsor26,Al411247,,Sponsor,,Control,Comparator,2,218,1,225,,,NA,NA,
+Sponsor27,CPM0896003,,Sponsor,,Control,Comparator,0,14,2,18,,,NA,NA,
+Sponsor28,CPM4497002,,Sponsor,,Control,Comparator,6,29,7,31,,,NA,NA,
+Sponsor29,CPM6796007,,Sponsor,,Control,Comparator,2,22,1,23,,,NA,NA,
+Sponsor3,Al411071,,Sponsor,,Control,Comparator,0,32,1,16,,,NA,NA,
+Sponsor30,Al411118,,Sponsor,,Control,Comparator,5,59,4,57,,,NA,NA,
+Sponsor31,Al411221,,Sponsor,,Control,Comparator,3,164,11,159,,,NA,NA,
+Sponsor32,Al411245,,Sponsor,,Control,Comparator,17,159,10,158,,,NA,NA,
+Sponsor4,Al411075,,Sponsor,,Control,Comparator,1,104,0,50,,,NA,NA,
+Sponsor5,Al411079,,Sponsor,,Control,Comparator,0,20,0,20,,,NA,NA,
+Sponsor6,Al411097,,Sponsor,,Control,Comparator,30,627,34,622,,,NA,NA,
+Sponsor7,Al411113,,Sponsor,,Control,Comparator,4,114,0,57,,,NA,NA,
+Sponsor8,Al411119,,Sponsor,,Control,Comparator,1,114,1,93,,,NA,NA,
+Sponsor9,Al411120,,Sponsor,,Control,Comparator,0,241,2,121,,,NA,NA,
