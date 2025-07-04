@@ -1,0 +1,1542 @@
+---
+title: "Model Fitting and Diagnostics"
+format:
+  html:
+    embed-resources: true
+    code-fold: true
+    code-tools: true
+---
+
+# Packages
+
+```{r}
+# Ensures the package "pacman" is installed
+if (!require("pacman")) install.packages("pacman")
+
+### Install/Load packages
+pacman::p_load(dplyr,
+               tidyr,
+               brms,
+               bayesplot,
+               tidybayes,
+               ggplot2,
+               here,
+               MetBrewer,
+               stringr)
+
+color_scheme_set("red")
+
+theme_set(
+  theme(
+    plot.title.position = 'plot',
+    axis.ticks.x = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_text(size = 14),
+    panel.background = element_blank(),
+    panel.grid.major.x = element_line(color = "gray80", linewidth = 0.3)
+  )
+)
+```
+
+
+# Data
+
+```{r}
+data = read.csv(here("data/cef_dataonly.csv"), header=T)
+
+# Risk of bias data
+rob = read.csv(here("data/ROB_cefepime.csv"), header=T)
+
+filtered_data = 
+  data |> 
+  left_join(rob, by = "Study.ID") |> 
+  filter(Comparator != "Control", #exclude sponsor studies
+         N_cef != "NA") |>  # exclude studies with missing data
+  rename("death_com" = deaths_com,
+         "study" = Study.ID,
+         "indication" = Intended.clinical.indication,
+         "comparator_group" = Comparator.group,
+         "population" = Patient.population,
+         "overall_rob" = Overall.ROB) 
+
+long_data = 
+  filtered_data |> 
+  pivot_longer(
+   cols = c(death_cef, death_com, N_cef, N_com),
+   names_to = c(".value", "group"),
+   names_sep = "_"
+) |> 
+  # important for model fitting
+  mutate(study = factor(study),
+         treat = ifelse(group == "com", 0, 1) |> factor(levels = c("0", "1")),
+         treat12 = ifelse(group == "com", -0.5, 0.5),
+         
+         indication = factor(indication,
+                             levels = c("Febrile neutropenia",
+                                        "Pneumonia",
+                                        "Severe bacterial infections",
+                                        "UTI",
+                                        "Meningitis",      
+                                        "Mixed")),
+         comparator_group = factor(comparator_group,
+                                   levels = c("Piperacillin-tazobactam",
+                                              "Carbapenem",
+                                              "Cefotaxime/Ceftriaxone",
+                                              "Ceftazidime")),
+         population = factor(population,
+                             levels = c("Adults",
+                                        "Pediatrics")),
+         Cefepime_q12 = factor(Cefepime_q12,
+                               levels = c("High",
+                                          "Low")),
+         
+         overall_rob = factor(overall_rob,
+                              levels = c("Low",
+                                         "Some concerns",
+                                         "High"))
+         )
+```
+
+# Overall Model
+
+Model formula
+
+```{r}
+# Model 4 in DOI: 10.1002/sim.7588
+mf = 
+  bf(death | trials(N) ~ 1 + study + treat + (treat12 - 1 | study))
+```
+
+
+Priors
+
+```{r}
+get_prior(mf, family = binomial, data = long_data)
+```
+
+
+```{r}
+informative = bayesmeta::TurnerEtAlPrior("all-cause mortality",
+                                         "pharma",
+                                         "pharma")
+
+
+logmean = informative$parameters["tau", "mu"]
+logsd = informative$parameters["tau", "sigma"]
+
+# logmean
+# -2.09
+
+# logsd
+# 0.705
+
+priors_overall = 
+  # study's baseline (treat = 0) log odds
+   prior(normal(0, 1.5), class = Intercept) + 
+  prior(normal(0, 1.5), class = b) + 
+  # overall treatment effect, log odds ratio, "theta"
+  prior(normal(0, 0.82), class = b, coef = "treat1") + 
+  # between-study SD, "tau"
+  prior(lognormal(-2.09, 0.705), class = sd)
+```
+
+Fit the model only sampling from prior distributions
+
+```{r}
+overall_mod_prior = 
+  brm(
+    sample_prior = "only",
+    formula = mf,
+    family = binomial,
+    prior = priors_overall, 
+    data = long_data,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "overall_mod_prior.Rds"),
+    file_refit = "on_change"
+)
+```
+
+Now check if the estimand distribution looks reasonable (prior predictive check):
+
+```{r}
+as_draws_df(overall_mod_prior) |> 
+  ggplot() +
+  aes(x = b_treat1) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) + 
+  scale_x_continuous(
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10) |> log(),
+    labels = function(x) exp(x)
+    ) +
+  coord_cartesian(x = c(0.1, 10) |> log())  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ",
+       title = "Prior Predictive Check of the Treatment Effect Estimand") +
+  theme(axis.text.y = element_blank())
+
+```
+
+Fit the full model (data + prior)
+
+```{r}
+overall_mod = 
+  brm(
+    formula = mf,
+    family = binomial,
+    prior = priors_overall, 
+    data = long_data,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "overall_mod.Rds"),
+    file_refit = "on_change"
+)
+
+```
+
+
+## Model Diagnostics
+
+Rhat
+
+```{r}
+rhat(overall_mod$fit) |> 
+  mcmc_rhat_hist() +
+  theme(legend.position = "none" )
+```
+
+Ratios of effective sample size to total sample size
+
+Values are colored using different shades (lighter is better). The chosen
+thresholds are somewhat arbitrary, but can be useful guidelines in practice.
+
+light: between 0.5 and 1 (high)
+
+mid: between 0.1 and 0.5 (good)
+
+dark: below 0.1 (low)
+
+```{r}
+neff_ratio(overall_mod) |> 
+  mcmc_neff_hist() +
+  theme(legend.position = "none" )
+```
+
+### Does the Trace-Plot Exhibit Convergence?
+
+```{r}
+mcmc_trace(overall_mod, pars = c("b_treat1","sd_study__treat12"))
+```
+
+### Does the Histogram Have Enough Information?
+
+```{r}
+mcmc_hist(overall_mod, pars = c("b_treat1","sd_study__treat12"))
+```
+
+### Do the Chains Exhibit a Strong Degree of Autocorrelation?
+
+```{r}
+mcmc_acf(overall_mod, pars = c("b_treat1","sd_study__treat12"),
+         lags = 10)
+```
+
+### Does the Posterior Distribution Make Substantive Sense?
+
+```{r  fig.align='center'}
+mcmc_dens(overall_mod,
+          pars = c("b_treat1","sd_study__treat12"),
+          transformations = list("b_treat1" = "exp"))
+```
+
+# Meta-Regressions
+
+## Clinical Indication
+
+Model formula
+
+```{r}
+# Formula with meta-regression
+mf_indication = 
+  bf(death | trials(N) ~ 1 + study + treat*indication + (treat12 - 1 | study))
+
+get_prior(mf_indication, data = long_data, family = binomial)
+```
+
+Priors
+
+
+```{r}
+priors_regression_indication = 
+  # study's baseline (treat = 0) log odds, when subgroup == "Febrile neutropenia"
+  prior(normal(0, 1.5), class = Intercept) +
+  prior(normal(0, 1.5), class = b) + 
+  # treatment effect in reference subgroup "Febrile neutropenia", log odds ratio
+  prior(normal(0, 0.82), class = b, coef = "treat1") + 
+  # change in log-odds when treat = 0 for each subgroup
+  prior(normal(0, 1.2), class = b, coef = "indicationMeningitis") + 
+  prior(normal(0, 1.2), class = b, coef = "indicationMixed") + 
+  prior(normal(0, 1.2), class = b, coef = "indicationPneumonia") + 
+  prior(normal(0, 1.2), class = b, coef = "indicationSeverebacterialinfections") + 
+  prior(normal(0, 1.2), class = b, coef = "indicationUTI") + 
+  # change in the treatment effect for each subgroup compared to "Febrile neutropenia"
+  prior(normal(0, 0.3), class = b, coef = "treat1:indicationMeningitis") + 
+  prior(normal(0, 0.3), class = b, coef = "treat1:indicationMixed") + 
+  prior(normal(0, 0.3), class = b, coef = "treat1:indicationPneumonia") + 
+  prior(normal(0, 0.3), class = b, coef = "treat1:indicationSeverebacterialinfections") + 
+  prior(normal(0, 0.3), class = b, coef = "treat1:indicationUTI") + 
+  # between-study SD, "tau"
+  prior(lognormal(-2.09, 0.705), class = sd)
+```
+
+Fit the model only sampling from prior distributions
+
+```{r}
+indication_mod_prior = 
+  brm(
+    sample_prior = "only",
+    formula = mf_indication,
+    family = binomial,
+    prior = priors_regression_indication, 
+    data = long_data,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "indication_mod_prior.Rds"),
+    file_refit = "on_change"
+)
+```
+
+Now check if estimand distributions look reasonable (prior predictive check):
+
+```{r}
+as_draws_df(indication_mod_prior) |> 
+  reframe("Febrile Neutropenia" = b_treat1,
+          "Mixed" = b_treat1 + `b_treat1:indicationMixed`,
+          "Pneumonia" = b_treat1 + `b_treat1:indicationPneumonia`,
+          "Severe bacterial infections" = b_treat1 + `b_treat1:indicationSeverebacterialinfections`,
+          "UTI" = b_treat1 + `b_treat1:indicationUTI`,
+          "Meningitis" = b_treat1 + `b_treat1:indicationMeningitis`) |> 
+  pivot_longer(everything()) |> 
+  mutate(name = factor(name, levels = c("Febrile Neutropenia",                     
+                                        "Pneumonia",
+                                        "Severe bacterial infections",
+                                        "UTI",  
+                                        "Mixed",
+                                        "Meningitis") |> rev()
+                       )
+         ) |> 
+  
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  scale_fill_manual(values=met.brewer("Isfahan1", 8) |> rev()) +
+  scale_x_continuous(
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10) |> log(),
+    labels = function(x) exp(x)
+    ) +
+  coord_cartesian(x = c(0.1, 10) |> log())  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+Fit the full model (data + prior)
+
+```{r}
+indication_mod = 
+  brm(
+    formula = mf_indication,
+    family = binomial,
+    prior = priors_regression_indication, 
+    data = long_data,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "indication_mod.Rds"),
+    file_refit = "on_change"
+)
+```
+
+
+### Model Diagnostics
+
+Rhat
+
+```{r}
+rhat(indication_mod$fit) |> 
+  mcmc_rhat_hist() +
+  theme(legend.position = "none" )
+```
+
+Ratios of effective sample size to total sample size
+
+Values are colored using different shades (lighter is better). The chosen
+thresholds are somewhat arbitrary, but can be useful guidelines in practice.
+
+light: between 0.5 and 1 (high)
+
+mid: between 0.1 and 0.5 (good)
+
+dark: below 0.1 (low)
+
+```{r}
+neff_ratio(indication_mod) |> 
+  mcmc_neff_hist() +
+  theme(legend.position = "none" )
+```
+
+#### Does the Trace-Plot Exhibit Convergence?
+
+```{r}
+mcmc_trace(indication_mod, pars = c("b_treat1",
+                                    "b_treat1:indicationMeningitis",
+                                    "b_treat1:indicationMixed",
+                                    "b_treat1:indicationPneumonia",
+                                    "b_treat1:indicationSeverebacterialinfections",
+                                    "b_treat1:indicationUTI",
+                                    "sd_study__treat12"))
+```
+
+#### Does the Histogram Have Enough Information?
+
+```{r}
+mcmc_hist(indication_mod, pars = c("b_treat1",
+                                    "b_treat1:indicationMeningitis",
+                                    "b_treat1:indicationMixed",
+                                    "b_treat1:indicationPneumonia",
+                                    "b_treat1:indicationSeverebacterialinfections",
+                                    "b_treat1:indicationUTI",
+                                    "sd_study__treat12"))
+```
+
+#### Do the Chains Exhibit a Strong Degree of Autocorrelation?
+
+```{r}
+mcmc_acf(indication_mod, pars = c("b_treat1",
+                                  "b_treat1:indicationMeningitis",
+                                  "b_treat1:indicationMixed",
+                                  "b_treat1:indicationPneumonia",
+                                  "b_treat1:indicationSeverebacterialinfections",
+                                  "b_treat1:indicationUTI",
+                                  "sd_study__treat12"),
+         lags = 10)
+```
+
+#### Does the Posterior Distribution Make Substantive Sense?
+
+```{r  fig.align='center'}
+mcmc_dens(indication_mod,
+          pars = c("b_treat1",
+                   "sd_study__treat12"),
+          transformations = list("b_treat1" = "exp"))
+```
+
+## Comparator Group
+
+Model formula
+
+```{r}
+# Formula with meta-regression
+mf_comparator = 
+  bf(death | trials(N) ~ 1 + study + treat*comparator_group + (treat12 - 1 | study))
+
+get_prior(mf_comparator, data = long_data, family = binomial)
+```
+
+Priors
+
+```{r}
+priors_regression_comparator = 
+  # study's baseline (treat = 0) log odds when subgroup == "Piperacillin-tazobactam"
+  prior(normal(0, 1.5), class = Intercept) +
+  prior(normal(0, 1.5), class = b) + 
+  # treatment effect in reference subgroup "Piperacillin-tazobactam", log odds ratio
+  prior(normal(0, 0.82), class = b, coef = "treat1") + 
+  # change in log-odds when treat = 0 for each subgroup
+  prior(normal(0, 1.2), class = b, coef = "comparator_groupCarbapenem") + 
+  prior(normal(0, 1.2), class = b, coef = "comparator_groupCefotaximeDCeftriaxone") + 
+  prior(normal(0, 1.2), class = b, coef = "comparator_groupCeftazidime") + 
+  # change in the treatment effect for each subgroup compared to "Piperacillin-tazobactam"
+  prior(normal(0, 0.3), class = b, coef = "treat1:comparator_groupCarbapenem") + 
+  prior(normal(0, 0.3), class = b, coef = "treat1:comparator_groupCefotaximeDCeftriaxone") + 
+  prior(normal(0, 0.3), class = b, coef = "treat1:comparator_groupCeftazidime") + 
+  # between-study SD, "tau"
+  prior(lognormal(-2.09, 0.705), class = sd)
+```
+
+Fit the model only sampling from prior distributions
+
+```{r}
+comparator_mod_prior = 
+  brm(
+    sample_prior = "only",
+    formula = mf_comparator,
+    family = binomial,
+    prior = priors_regression_comparator, 
+    data = subset(long_data, !is.na(comparator_group)), # remove NA
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "comparator_mod_prior.Rds"),
+    file_refit = "on_change"
+)
+```
+
+Now check if estimand distributions look reasonable (prior predictive check):
+
+```{r}
+as_draws_df(comparator_mod_prior) |> 
+  reframe("Piperacillin-tazobactam" = b_treat1,
+          "Carbapenem" = b_treat1 + `b_treat1:comparator_groupCarbapenem`,
+          "Cefotaxime/Ceftriaxone" = b_treat1 + `b_treat1:comparator_groupCefotaximeDCeftriaxone`,
+          "Ceftazidime" = b_treat1 + `b_treat1:comparator_groupCeftazidime`) |> 
+  pivot_longer(everything()) |> 
+  mutate(name = factor(name, c("Piperacillin-tazobactam",
+                               "Carbapenem",
+                               "Cefotaxime/Ceftriaxone",
+                               "Ceftazidime") |> rev()
+                       )
+         ) |> 
+  
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  scale_fill_manual(values=met.brewer("Isfahan1", 4) |> rev()) +
+  scale_x_continuous(
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10) |> log(),
+    labels = function(x) exp(x)
+    ) +
+  coord_cartesian(x = c(0.1, 10) |> log())  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+Fit the full model (data + prior)
+
+```{r}
+comparator_mod = 
+  brm(
+    formula = mf_comparator,
+    family = binomial,
+    prior = priors_regression_comparator, 
+    data = subset(long_data, !is.na(comparator_group)), # remove NA
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "comparator_mod.Rds"),
+    file_refit = "on_change"
+)
+```
+
+
+### Model Diagnostics
+
+Rhat
+
+```{r}
+rhat(comparator_mod$fit) |> 
+  mcmc_rhat_hist() +
+  theme(legend.position = "none" )
+```
+
+Ratios of effective sample size to total sample size
+
+Values are colored using different shades (lighter is better). The chosen
+thresholds are somewhat arbitrary, but can be useful guidelines in practice.
+
+light: between 0.5 and 1 (high)
+
+mid: between 0.1 and 0.5 (good)
+
+dark: below 0.1 (low)
+
+```{r}
+neff_ratio(comparator_mod) |> 
+  mcmc_neff_hist() +
+  theme(legend.position = "none" )
+```
+
+#### Does the Trace-Plot Exhibit Convergence?
+
+```{r}
+mcmc_trace(comparator_mod, pars = c("b_treat1",
+                                    "b_treat1:comparator_groupCarbapenem",
+                                    "b_treat1:comparator_groupCefotaximeDCeftriaxone",
+                                    "b_treat1:comparator_groupCeftazidime",
+                                    "sd_study__treat12"))
+```
+
+#### Does the Histogram Have Enough Information?
+
+```{r}
+mcmc_hist(comparator_mod, pars = c("b_treat1",
+                                    "b_treat1:comparator_groupCarbapenem",
+                                    "b_treat1:comparator_groupCefotaximeDCeftriaxone",
+                                    "b_treat1:comparator_groupCeftazidime",
+                                    "sd_study__treat12"))
+```
+
+#### Do the Chains Exhibit a Strong Degree of Autocorrelation?
+
+```{r}
+mcmc_acf(comparator_mod, pars = c("b_treat1",
+                                    "b_treat1:comparator_groupCarbapenem",
+                                    "b_treat1:comparator_groupCefotaximeDCeftriaxone",
+                                    "b_treat1:comparator_groupCeftazidime",
+                                    "sd_study__treat12"),
+         lags = 10)
+```
+
+#### Does the Posterior Distribution Make Substantive Sense?
+
+```{r  fig.align='center'}
+mcmc_dens(comparator_mod,
+          pars = c("b_treat1",
+                   "sd_study__treat12"),
+          transformations = list("b_treat1" = "exp"))
+```
+
+## Population
+
+Model formula
+
+```{r}
+# Formula with meta-regression
+mf_population = 
+  bf(death | trials(N) ~ 1 + study + treat*population + (treat12 - 1 | study))
+
+get_prior(mf_population, data = long_data, family = binomial)
+```
+
+Priors
+
+```{r}
+priors_regression_population = 
+  # study's baseline (treat = 0) log odds when subgroup == "Adults"
+  prior(normal(0, 1.5), class = Intercept) +
+  prior(normal(0, 1.5), class = b) + 
+  # treatment effect in reference subgroup "Adults", log odds ratio
+  prior(normal(0, 0.82), class = b, coef = "treat1") + 
+  # change in log-odds when treat = 0 for each subgroup
+  prior(normal(0, 1.2), class = b, coef = "populationPediatrics") + 
+  # change in the treatment effect for the "Pediatrics" subgroup
+  prior(normal(0, 0.3), class = b, coef = "treat1:populationPediatrics") + 
+  # between-study SD, "tau"
+  prior(lognormal(-2.09, 0.705), class = sd)
+```
+
+Fit the model only sampling from prior distributions
+
+```{r}
+population_mod_prior = 
+  brm(
+    sample_prior = "only",
+    formula = mf_population,
+    family = binomial,
+    prior = priors_regression_population, 
+    data = long_data,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "population_mod_prior.Rds"),
+    file_refit = "on_change"
+)
+```
+
+Now check if estimand distributions look reasonable (prior predictive check):
+
+```{r}
+as_draws_df(population_mod_prior) |> 
+  reframe("Adults" = b_treat1,
+          "Pediatrics" = b_treat1 + `b_treat1:populationPediatrics`) |> 
+  pivot_longer(everything()) |> 
+  mutate(name = factor(name, c("Adults",
+                               "Pediatrics") |> rev()
+                       )
+         ) |> 
+  
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  scale_fill_manual(values=met.brewer("Isfahan1", 2) |> rev()) +
+  scale_x_continuous(
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10) |> log(),
+    labels = function(x) exp(x)
+    ) +
+  coord_cartesian(x = c(0.1, 10) |> log())  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+Fit the full model (data + prior)
+
+```{r}
+population_mod = 
+  brm(
+    formula = mf_population,
+    family = binomial,
+    prior = priors_regression_population, 
+    data = long_data,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "population_mod.Rds"),
+    file_refit = "on_change"
+)
+```
+
+
+### Model Diagnostics
+
+Rhat
+
+```{r}
+rhat(population_mod$fit) |> 
+  mcmc_rhat_hist() +
+  theme(legend.position = "none" )
+```
+
+Ratios of effective sample size to total sample size
+
+Values are colored using different shades (lighter is better). The chosen
+thresholds are somewhat arbitrary, but can be useful guidelines in practice.
+
+light: between 0.5 and 1 (high)
+
+mid: between 0.1 and 0.5 (good)
+
+dark: below 0.1 (low)
+
+```{r}
+neff_ratio(population_mod) |> 
+  mcmc_neff_hist() +
+  theme(legend.position = "none" )
+```
+
+
+#### Does the Trace-Plot Exhibit Convergence?
+
+```{r}
+mcmc_trace(population_mod, pars = c("b_treat1",
+                                    "b_treat1:populationPediatrics",
+                                    "sd_study__treat12"))
+```
+
+#### Does the Histogram Have Enough Information?
+
+```{r}
+mcmc_hist(population_mod, pars = c("b_treat1",
+                                    "b_treat1:populationPediatrics",
+                                    "sd_study__treat12"))
+```
+
+#### Do the Chains Exhibit a Strong Degree of Autocorrelation?
+
+```{r}
+mcmc_acf(population_mod, pars = c("b_treat1",
+                                    "b_treat1:populationPediatrics",
+                                    "sd_study__treat12"),
+         lags = 10)
+```
+
+#### Does the Posterior Distribution Make Substantive Sense?
+
+```{r  fig.align='center'}
+mcmc_dens(population_mod,
+          pars = c("b_treat1",
+                   "b_treat1:populationPediatrics",
+                   "sd_study__treat12"),
+          transformations = list("b_treat1" = "exp"))
+```
+
+## Cefepime Dose
+
+Model formula
+
+```{r}
+# Formula with meta-regression
+mf_cefdose = 
+  bf(death | trials(N) ~ 1 + study + treat*Cefepime_q12 + (treat12 - 1 | study))
+
+get_prior(mf_cefdose, data = long_data, family = binomial)
+```
+
+Priors
+
+```{r}
+priors_regression_cefdose = 
+  # study's baseline (treat = 0) log odds when subgroup == "High"
+  prior(normal(0, 1.5), class = Intercept) +
+  prior(normal(0, 1.5), class = b) + 
+  # treatment effect in reference subgroup "High", log odds ratio
+  prior(normal(0, 0.82), class = b, coef = "treat1") + 
+  # change in log-odds when treat = 0 for each subgroup
+  prior(normal(0, 1.2), class = b, coef = "Cefepime_q12Low") + 
+  # change in the treatment effect for the "Low" subgroup
+  prior(normal(0, 0.3), class = b, coef = "treat1:Cefepime_q12Low") + 
+  # between-study SD, "tau"
+  prior(lognormal(-2.09, 0.705), class = sd)
+```
+
+Fit the model only sampling from prior distributions
+
+```{r}
+cefdose_mod_prior = 
+  brm(
+    sample_prior = "only",
+    formula = mf_cefdose,
+    family = binomial,
+    prior = priors_regression_cefdose, 
+    data = subset(long_data, !is.na(Cefepime_q12)), # remove NA,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "cefdose_mod_prior.Rds"),
+    file_refit = "on_change"
+)
+```
+
+Now check if estimand distributions look reasonable (prior predictive check):
+
+```{r}
+as_draws_df(cefdose_mod_prior) |> 
+  reframe("High Dose" = b_treat1,
+          "Low Dose" = b_treat1 + `b_treat1:Cefepime_q12Low`) |> 
+  pivot_longer(everything()) |> 
+  mutate(name = factor(name, c("High Dose",
+                               "Low Dose") |> rev()
+                       )
+         ) |> 
+  
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  scale_fill_manual(values=met.brewer("Isfahan1", 2) |> rev()) +
+  scale_x_continuous(
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10) |> log(),
+    labels = function(x) exp(x)
+    ) +
+  coord_cartesian(x = c(0.1, 10) |> log())  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+Fit the full model (data + prior)
+
+```{r}
+cefdose_mod = 
+  brm(
+    formula = mf_cefdose,
+    family = binomial,
+    prior = priors_regression_cefdose, 
+    data = subset(long_data, !is.na(Cefepime_q12)), # remove NA,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "cefdose_mod.Rds"),
+    file_refit = "on_change"
+)
+```
+
+
+### Model Diagnostics
+
+Rhat
+
+```{r}
+rhat(cefdose_mod$fit) |> 
+  mcmc_rhat_hist() +
+  theme(legend.position = "none" )
+```
+
+Ratios of effective sample size to total sample size
+
+Values are colored using different shades (lighter is better). The chosen thresholds are somewhat arbitrary, but can be useful guidelines in practice.
+
+light: between 0.5 and 1 (high)
+
+mid: between 0.1 and 0.5 (good)
+
+dark: below 0.1 (low)
+
+```{r}
+neff_ratio(cefdose_mod) |> 
+  mcmc_neff_hist() +
+  theme(legend.position = "none" )
+```
+
+There is a parameter with low Neff/N. Check if most important parameters have
+high Neff/N:
+
+```{r}
+neff_ratio(cefdose_mod, pars = c("b_treat1",
+                                    "b_treat1:Cefepime_q12Low",
+                                    "sd_study__treat12")) |> 
+  mcmc_neff() +
+  theme(legend.position = "none" )
+```
+
+
+#### Does the Trace-Plot Exhibit Convergence?
+
+```{r}
+mcmc_trace(cefdose_mod, pars = c("b_treat1",
+                                    "b_treat1:Cefepime_q12Low",
+                                    "sd_study__treat12"))
+```
+
+#### Does the Histogram Have Enough Information?
+
+```{r}
+mcmc_hist(cefdose_mod, pars = c("b_treat1",
+                                "b_treat1:Cefepime_q12Low",
+                                "sd_study__treat12"))
+```
+
+#### Do the Chains Exhibit a Strong Degree of Autocorrelation?
+
+```{r}
+mcmc_acf(cefdose_mod, pars = c("b_treat1",
+                                "b_treat1:Cefepime_q12Low",
+                                "sd_study__treat12"),
+         lags = 10)
+```
+
+#### Does the Posterior Distribution Make Substantive Sense?
+
+```{r  fig.align='center'}
+mcmc_dens(cefdose_mod, pars = c("b_treat1",
+                                "b_treat1:Cefepime_q12Low",
+                                "sd_study__treat12"),
+          transformations = list("b_treat1" = "exp"))
+```
+
+## Risk of Bias
+
+Model formula
+
+```{r}
+# Formula with meta-regression
+mf_rob = 
+  bf(death | trials(N) ~ 1 + study + treat*overall_rob + (treat12 - 1 | study))
+
+get_prior(mf_rob, data = long_data, family = binomial)
+```
+
+Priors
+
+```{r}
+priors_regression_rob = 
+  # study's baseline (treat = 0) log odds when subgroup == "Low"
+  prior(normal(0, 1.5), class = Intercept) +
+  prior(normal(0, 1.5), class = b) + 
+  # treatment effect in reference subgroup "Low", log odds ratio
+  prior(normal(0, 0.82), class = b, coef = "treat1") + 
+  # change in log-odds when treat = 0 for each subgroup
+  prior(normal(0, 1.2), class = b, coef = "overall_robHigh") + 
+  prior(normal(0, 1.2), class = b, coef = "overall_robSomeconcerns") + 
+  # change in the treatment effect for each subgroup
+  prior(normal(0, 0.3), class = b, coef = "treat1:overall_robHigh") + 
+  prior(normal(0, 0.3), class = b, coef = "treat1:overall_robSomeconcerns") + 
+  # between-study SD, "tau"
+  prior(lognormal(-2.09, 0.705), class = sd)
+```
+
+Fit the model only sampling from prior distributions
+
+```{r}
+rob_mod_prior = 
+  brm(
+    sample_prior = "only",
+    formula = mf_rob,
+    family = binomial,
+    prior = priors_regression_rob, 
+    data = subset(long_data, !is.na(overall_rob)), # remove NA,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "rob_mod_prior.Rds"),
+    file_refit = "on_change"
+  )
+```
+
+Now check if estimand distributions look reasonable (prior predictive check):
+  
+```{r}
+as_draws_df(rob_mod_prior) |> 
+  reframe("Low" = b_treat1,
+          "Some concerns" = b_treat1 + `b_treat1:overall_robSomeconcerns`,
+          "High" = b_treat1 + `b_treat1:overall_robHigh`) |> 
+  pivot_longer(everything()) |> 
+  mutate(name = factor(name, c("Low",
+                               "Some concerns",
+                               "High") |> rev()
+  )
+  ) |> 
+  
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  scale_fill_manual(values=met.brewer("Isfahan1", 3) |> rev()) +
+  scale_x_continuous(
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10) |> log(),
+    labels = function(x) exp(x)
+  ) +
+  coord_cartesian(x = c(0.1, 10) |> log())  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+Fit the full model (data + prior)
+
+```{r}
+rob_mod = 
+  brm(
+    formula = mf_rob,
+    family = binomial,
+    prior = priors_regression_rob, 
+    data = subset(long_data, !is.na(overall_rob)), # remove NA,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "rob_mod.Rds"),
+    file_refit = "on_change"
+  )
+```
+
+
+### Model Diagnostics
+
+Rhat
+
+```{r}
+rhat(rob_mod$fit) |> 
+  mcmc_rhat_hist() +
+  theme(legend.position = "none" )
+```
+
+Ratios of effective sample size to total sample size
+
+Values are colored using different shades (lighter is better). The chosen thresholds are somewhat arbitrary, but can be useful guidelines in practice.
+
+light: between 0.5 and 1 (high)
+
+mid: between 0.1 and 0.5 (good)
+
+dark: below 0.1 (low)
+
+```{r}
+neff_ratio(rob_mod) |> 
+  mcmc_neff_hist() +
+  theme(legend.position = "none" )
+```
+
+There is a parameter with low Neff/N. Check if most important parameters have
+high Neff/N:
+  
+```{r}
+neff_ratio(rob_mod, pars = c("b_treat1",
+                             "b_treat1:overall_robSomeconcerns",
+                             "b_treat1:overall_robHigh",
+                             "sd_study__treat12")) |> 
+  mcmc_neff() +
+  theme(legend.position = "none" )
+```
+
+
+#### Does the Trace-Plot Exhibit Convergence?
+
+```{r}
+mcmc_trace(rob_mod, pars = c("b_treat1",
+                             "b_treat1:overall_robSomeconcerns",
+                             "b_treat1:overall_robHigh",
+                             "sd_study__treat12"))
+```
+
+#### Does the Histogram Have Enough Information?
+
+```{r}
+mcmc_hist(rob_mod, pars = c("b_treat1",
+                             "b_treat1:overall_robSomeconcerns",
+                             "b_treat1:overall_robHigh",
+                             "sd_study__treat12"))
+```
+
+#### Do the Chains Exhibit a Strong Degree of Autocorrelation?
+
+```{r}
+mcmc_acf(rob_mod, pars = c("b_treat1",
+                             "b_treat1:overall_robSomeconcerns",
+                             "b_treat1:overall_robHigh",
+                             "sd_study__treat12"),
+         lags = 10)
+```
+
+#### Does the Posterior Distribution Make Substantive Sense?
+
+```{r  fig.align='center'}
+mcmc_dens(rob_mod, pars = c("b_treat1",
+                             "b_treat1:overall_robSomeconcerns",
+                             "b_treat1:overall_robHigh",
+                             "sd_study__treat12"),
+          transformations = list("b_treat1" = "exp"))
+```
+
+# Published vs. Unpublished
+
+## Data
+
+```{r}
+filtered_data_publish = 
+  data |> 
+  filter(N_cef != "NA") |>  # exclude studies with missing data
+  rename("death_com" = deaths_com,
+         "study" = Study.ID) |> 
+  mutate(publish = ifelse(Comparator == "Control", "Unpublished", "Published"))
+
+long_data_publish = 
+  filtered_data_publish |> 
+  pivot_longer(
+   cols = c(death_cef, death_com, N_cef, N_com),
+   names_to = c(".value", "group"),
+   names_sep = "_"
+) |> 
+  # important for model fitting
+  mutate(study = factor(study),
+         treat = ifelse(group == "com", 0, 1) |> factor(levels = c("0", "1")),
+         treat12 = ifelse(group == "com", -0.5, 0.5),
+         
+         publish = factor(publish,
+                             levels = c("Published",
+                                        "Unpublished"))
+         )
+```
+
+
+## Overall Model
+
+Model formula
+
+```{r}
+# Model 4 in DOI: 10.1002/sim.7588
+mf = 
+  bf(death | trials(N) ~ 1 + study + treat + (treat12 - 1 | study))
+```
+
+
+Priors
+
+```{r}
+get_prior(mf, family = binomial, data = long_data_publish)
+```
+
+
+```{r}
+informative = bayesmeta::TurnerEtAlPrior("all-cause mortality",
+                                         "pharma",
+                                         "pharma")
+
+
+logmean = informative$parameters["tau", "mu"]
+logsd = informative$parameters["tau", "sigma"]
+
+# logmean
+# -2.09
+
+# logsd
+# 0.705
+
+priors_overall = 
+  # study's baseline (treat = 0) log odds
+   prior(normal(0, 1.5), class = Intercept) + 
+  prior(normal(0, 1.5), class = b) + 
+  # overall treatment effect, log odds ratio, "theta"
+  prior(normal(0, 0.82), class = b, coef = "treat1") + 
+  # between-study SD, "tau"
+  prior(lognormal(-2.09, 0.705), class = sd)
+```
+
+Fit the model only sampling from prior distributions
+
+```{r}
+publish_overall_mod_prior = 
+  brm(
+    sample_prior = "only",
+    formula = mf,
+    family = binomial,
+    prior = priors_overall, 
+    data = long_data_publish,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "publish_overall_mod_prior.Rds"),
+    file_refit = "on_change"
+)
+```
+
+Now check if the estimand distribution looks reasonable (prior predictive check):
+
+```{r}
+as_draws_df(publish_overall_mod_prior) |> 
+  ggplot() +
+  aes(x = b_treat1) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) + 
+  scale_x_continuous(
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10) |> log(),
+    labels = function(x) exp(x)
+    ) +
+  coord_cartesian(x = c(0.1, 10) |> log())  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ",
+       title = "Prior Predictive Check of the Treatment Effect Estimand") +
+  theme(axis.text.y = element_blank())
+
+```
+
+Fit the full model (data + prior)
+
+```{r}
+publish_overall_mod = 
+  brm(
+    formula = mf,
+    family = binomial,
+    prior = priors_overall, 
+    data = long_data_publish,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "publish_overall_mod.Rds"),
+    file_refit = "on_change"
+)
+
+```
+
+
+## Model Diagnostics
+
+Rhat
+
+```{r}
+rhat(publish_overall_mod$fit) |> 
+  mcmc_rhat_hist() +
+  theme(legend.position = "none" )
+```
+
+Ratios of effective sample size to total sample size
+
+Values are colored using different shades (lighter is better). The chosen
+thresholds are somewhat arbitrary, but can be useful guidelines in practice.
+
+light: between 0.5 and 1 (high)
+
+mid: between 0.1 and 0.5 (good)
+
+dark: below 0.1 (low)
+
+```{r}
+neff_ratio(publish_overall_mod) |> 
+  mcmc_neff_hist() +
+  theme(legend.position = "none" )
+```
+
+### Does the Trace-Plot Exhibit Convergence?
+
+```{r}
+mcmc_trace(publish_overall_mod, pars = c("b_treat1","sd_study__treat12"))
+```
+
+### Does the Histogram Have Enough Information?
+
+```{r}
+mcmc_hist(publish_overall_mod, pars = c("b_treat1","sd_study__treat12"))
+```
+
+### Do the Chains Exhibit a Strong Degree of Autocorrelation?
+
+```{r}
+mcmc_acf(publish_overall_mod, pars = c("b_treat1","sd_study__treat12"),
+         lags = 10)
+```
+
+### Does the Posterior Distribution Make Substantive Sense?
+
+```{r  fig.align='center'}
+mcmc_dens(publish_overall_mod,
+          pars = c("b_treat1","sd_study__treat12"),
+          transformations = list("b_treat1" = "exp"))
+```
+
+## Meta-Regressions
+
+Model formula
+
+```{r}
+# Formula with meta-regression
+mf_publish = 
+  bf(death | trials(N) ~ 1 + study + treat*publish + (treat12 - 1 | study))
+
+get_prior(mf_publish, data = long_data_publish, family = binomial)
+```
+
+Priors
+
+
+```{r}
+priors_regression_publish = 
+  # study's baseline (treat = 0) log odds, when subgroup == "Published"
+  prior(normal(0, 1.5), class = Intercept) +
+  prior(normal(0, 1.5), class = b) + 
+  # treatment effect in reference subgroup "Published", log odds ratio
+  prior(normal(0, 0.82), class = b, coef = "treat1") + 
+  # change in log-odds when treat = 0 for subgroup "Unpublished"
+  prior(normal(0, 1.2), class = b, coef = "publishUnpublished") + 
+  # change in the treatment effect for subgroup "Unpublished" compared to "Published"
+  prior(normal(0, 0.3), class = b, coef = "treat1:publishUnpublished") + 
+  # between-study SD, "tau"
+  prior(lognormal(-2.09, 0.705), class = sd)
+```
+
+Fit the model only sampling from prior distributions
+
+```{r}
+publish_subgroup_mod_prior = 
+  brm(
+    sample_prior = "only",
+    formula = mf_publish,
+    family = binomial,
+    prior = priors_regression_publish, 
+    data = long_data_publish,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "publish_subgroup_mod_prior.Rds"),
+    file_refit = "on_change"
+  )
+```
+
+Now check if estimand distributions look reasonable (prior predictive check):
+  
+```{r}
+as_draws_df(publish_subgroup_mod_prior) |> 
+  reframe("Published" = b_treat1,
+          "Unpublished" = b_treat1 + `b_treat1:publishUnpublished`) |> 
+  pivot_longer(everything()) |> 
+  mutate(name = factor(name, levels = c("Published",                     
+                                        "Unpublished") |> rev()
+  )
+  ) |> 
+  
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  scale_fill_manual(values=met.brewer("Isfahan1", 2) |> rev()) +
+  scale_x_continuous(
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10) |> log(),
+    labels = function(x) exp(x)
+  ) +
+  coord_cartesian(x = c(0.1, 10) |> log())  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+Fit the full model (data + prior)
+
+```{r}
+publish_subgroup_mod = 
+  brm(
+    formula = mf_publish,
+    family = binomial,
+    prior = priors_regression_publish, 
+    data = long_data_publish,
+    
+    control = list(adapt_delta = .95),
+    backend = "cmdstanr", # faster
+    cores = parallel::detectCores(),
+    chains = 4,
+    warmup = 5000, 
+    iter = 10000, 
+    seed = 123,
+    refresh = 0, # omit sampling text
+    file = here("models", "publish_subgroup_mod.Rds"),
+    file_refit = "on_change"
+  )
+```
+
+
+### Model Diagnostics
+
+Rhat
+
+```{r}
+rhat(publish_subgroup_mod$fit) |> 
+  mcmc_rhat_hist() +
+  theme(legend.position = "none" )
+```
+
+Ratios of effective sample size to total sample size
+
+Values are colored using different shades (lighter is better). The chosen
+thresholds are somewhat arbitrary, but can be useful guidelines in practice.
+
+light: between 0.5 and 1 (high)
+
+mid: between 0.1 and 0.5 (good)
+
+dark: below 0.1 (low)
+
+```{r}
+neff_ratio(publish_subgroup_mod) |> 
+  mcmc_neff_hist() +
+  theme(legend.position = "none" )
+```
+
+#### Does the Trace-Plot Exhibit Convergence?
+
+```{r}
+mcmc_trace(publish_subgroup_mod,
+           pars = c("b_treat1",
+                    "b_treat1:publishUnpublished",
+                    "sd_study__treat12"))
+```
+
+#### Does the Histogram Have Enough Information?
+
+```{r}
+mcmc_hist(publish_subgroup_mod,
+           pars = c("b_treat1",
+                    "b_treat1:publishUnpublished",
+                    "sd_study__treat12"))
+```
+
+#### Do the Chains Exhibit a Strong Degree of Autocorrelation?
+
+```{r}
+mcmc_acf(publish_subgroup_mod,
+           pars = c("b_treat1",
+                    "b_treat1:publishUnpublished",
+                    "sd_study__treat12"),
+         lags = 10)
+```
+
+#### Does the Posterior Distribution Make Substantive Sense?
+
+```{r  fig.align='center'}
+mcmc_dens(publish_subgroup_mod,
+           pars = c("b_treat1",
+                    "b_treat1:publishUnpublished",
+                    "sd_study__treat12"),
+          transformations = list("b_treat1" = "exp"))
+```

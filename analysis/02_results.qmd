@@ -1,0 +1,1083 @@
+---
+title: "Subgroup Figures"
+format:
+  html:
+    embed-resources: true
+    code-fold: true
+    code-tools: true
+---
+
+# Packages
+
+```{r}
+# Ensures the package "pacman" is installed
+if (!require("pacman")) install.packages("pacman")
+
+### Install/Load packages
+pacman::p_load(dplyr,
+               tidyr,
+               brms,
+               bayesplot,
+               tidybayes,
+               ggplot2,
+               here,
+               MetBrewer,
+               khroma,
+               stringr,
+               forcats)
+
+theme_set(
+  theme(
+    plot.title.position = 'plot',
+    axis.ticks.x = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    panel.background = element_blank(),
+    panel.grid.major.x = element_line(color = "gray80", linewidth = 0.3)
+  )
+)
+```
+
+
+# Data
+
+```{r}
+data = read.csv(here("data/cef_dataonly.csv"), header=T)
+
+# Risk of bias data
+rob = read.csv(here("data/ROB_cefepime.csv"), header=T)
+
+filtered_data = 
+  data |> 
+  left_join(rob, by = "Study.ID") |> 
+  filter(Comparator != "Control", #exclude sponsor studies
+         N_cef != "NA") |>  # exclude studies with missing data
+  rename("death_com" = deaths_com,
+         "study" = Study.ID,
+         "indication" = Intended.clinical.indication,
+         "comparator_group" = Comparator.group,
+         "population" = Patient.population,
+         "overall_rob" = Overall.ROB) 
+
+long_data = 
+  filtered_data |> 
+  pivot_longer(
+   cols = c(death_cef, death_com, N_cef, N_com),
+   names_to = c(".value", "group"),
+   names_sep = "_"
+) |> 
+  # important for model fitting
+  mutate(study = factor(study),
+         treat = ifelse(group == "com", 0, 1) |> factor(levels = c("0", "1")),
+         treat12 = ifelse(group == "com", -0.5, 0.5),
+         
+         indication = factor(indication,
+                             levels = c("Febrile neutropenia",
+                                        "Pneumonia",
+                                        "Severe bacterial infections",
+                                        "UTI",
+                                        "Meningitis",      
+                                        "Mixed")),
+         comparator_group = factor(comparator_group,
+                                   levels = c("Piperacillin-tazobactam",
+                                              "Carbapenem",
+                                              "Cefotaxime/Ceftriaxone",
+                                              "Ceftazidime")),
+         population = factor(population,
+                             levels = c("Adults",
+                                        "Pediatrics")),
+         Cefepime_q12 = factor(Cefepime_q12,
+                               levels = c("High",
+                                          "Low")),
+         
+         overall_rob = factor(overall_rob,
+                              levels = c("Low",
+                                         "Some concerns",
+                                         "High"))
+         )
+```
+
+```{r}
+filtered_data_publish = 
+  data |> 
+  filter(N_cef != "NA") |>  # exclude studies with missing data
+  rename("death_com" = deaths_com,
+         "study" = Study.ID) |> 
+  mutate(publish = ifelse(Comparator == "Control", "Unpublished", "Published"))
+
+long_data_publish = 
+  filtered_data_publish |> 
+  pivot_longer(
+   cols = c(death_cef, death_com, N_cef, N_com),
+   names_to = c(".value", "group"),
+   names_sep = "_"
+) |> 
+  # important for model fitting
+  mutate(study = factor(study),
+         treat = ifelse(group == "com", 0, 1) |> factor(levels = c("0", "1")),
+         treat12 = ifelse(group == "com", -0.5, 0.5),
+         
+         publish = factor(publish,
+                             levels = c("Published",
+                                        "Unpublished"))
+         )
+```
+
+
+# Models
+
+```{r}
+overall_mod = readRDS(here::here(here("models", "overall_mod.Rds")))
+indication_mod = readRDS(here("models", "indication_mod.Rds"))
+comparator_mod = readRDS(here("models", "comparator_mod.Rds"))
+population_mod = readRDS(here("models", "population_mod.Rds"))
+cefdose_mod = readRDS(here("models", "cefdose_mod.Rds"))
+rob_mod = readRDS(here("models", "rob_mod.Rds"))
+publish_overall_mod = readRDS(here("models", "publish_overall_mod.Rds"))
+publish_subgroup_mod = readRDS(here("models", "publish_subgroup_mod.Rds"))
+```
+
+# Figures
+
+## Clinical Indication
+
+```{r}
+# Count number of studies
+indication_n_studies = 
+  long_data |> 
+  filter(group == "com") |> 
+  count(indication) |> 
+  rename(name = "indication") |> 
+  mutate(n = as.numeric(n),
+         name = as.character(name),
+         name = ifelse(name == "Febrile neutropenia", "Febrile Neutropenia", name))
+
+indication_overall_n_studies =
+  indication_n_studies |> 
+  bind_rows(
+    tibble(name = "Overall", n = overall_mod$data$study |> unique() |> length())
+  ) |> 
+  mutate(name = factor(name, levels = c("Overall",
+                                        "Febrile Neutropenia",                     
+                                        "Pneumonia",
+                                        "Severe bacterial infections",
+                                        "UTI",
+                                        "Mixed",
+                                        "Meningitis") |> rev()
+                       )
+         )
+
+# Get draws from the overall model
+
+overall_draws = 
+  overall_mod |>
+  tidy_draws() |> 
+  select(b_treat1) |> 
+  mutate(name = "Overall") |> 
+  rename("value" = b_treat1)
+
+# colors
+iridescent <- color("iridescent")
+
+# Get draws from the subgroup model
+indication_draws = 
+  indication_mod |> 
+  tidy_draws() |> 
+  reframe("Febrile Neutropenia" = b_treat1,
+          Pneumonia = b_treat1 + `b_treat1:indicationPneumonia`,
+          "Severe bacterial infections" = b_treat1 + `b_treat1:indicationSeverebacterialinfections`,
+          UTI = b_treat1 + `b_treat1:indicationUTI`,
+          Meningitis = b_treat1 + `b_treat1:indicationMeningitis`,
+          Mixed = b_treat1 + `b_treat1:indicationMixed`) |> 
+  pivot_longer(everything()) |> 
+  # Add overall model draws
+  bind_rows(overall_draws) |> 
+  mutate(name = fct_relevel(name, levels(indication_overall_n_studies$name)))
+
+indication_labels = 
+  indication_draws |> 
+  group_by(name) |> 
+  median_hdi(value) |> 
+  mutate(across(value:.upper, ~exp(.) |> round(2))) |> 
+  mutate(estimate = str_c(value, " [", .lower, ", ", .upper, "]"))
+
+indication_prob = 
+  indication_draws |> 
+  group_by(name) |> 
+  reframe(prOR = (mean(value > log(1))*100) |> round(1))  
+
+
+indication_draws |> 
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  geom_vline(xintercept = c(subset(indication_labels, name == "Overall")$.lower |> log(),
+                            subset(indication_labels, name == "Overall")$.upper |> log()),
+             linetype = 2, linewidth = 0.3) +
+  scale_fill_manual(values=c(iridescent(7))) +
+  
+  geom_text(
+    data = data.frame(
+      name = "Overall",
+      label = "N of\nStudies",  
+      x = log(0.35) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = indication_overall_n_studies$name,
+      label = indication_overall_n_studies$n,  
+      x = log(0.35)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0  # Slight vertical nudge to align with distributions
+  ) +
+  
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "OR [95% CrI]",  
+      x = log(4.5) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = indication_labels$name,
+      label = indication_labels$estimate,  
+      x = log(4.5)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "Probability (%)\nof Any Harm, OR > 1",  
+      x = log(22) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.9  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = indication_prob$name,
+      label = indication_prob$prOR,  
+      x = log(22)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  scale_x_continuous(
+    breaks = c(0.5, 1,  2) |> log(),
+    labels = function(x) exp(x)
+    ) +
+  coord_cartesian(x = c(0.3, 40) |> log(),
+                  y = c(1, indication_labels |> nrow() + 0.7))  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+## Comparator Group
+
+```{r}
+# Count number of studies
+comparator_n_studies =  
+  long_data |> 
+  filter(group == "com") |> 
+  count(comparator_group) |> 
+  filter(!is.na(comparator_group)) |> 
+  rename(name = "comparator_group") |> 
+  mutate(n = as.numeric(n),
+         name = as.character(name))
+
+comparator_overall_n_studies =
+  comparator_n_studies |> 
+  bind_rows(
+    tibble(name = "Overall", n = overall_mod$data$study |> unique() |> length())
+  ) |> 
+  mutate(name = fct_reorder(name, n))
+         
+
+# Get draws from the overall model
+
+overall_draws = 
+  overall_mod |>
+  tidy_draws() |> 
+  select(b_treat1) |> 
+  mutate(name = "Overall") |> 
+  rename("value" = b_treat1)
+
+# Get draws from the indication model
+comparator_draws = 
+  comparator_mod |> 
+  tidy_draws() |> 
+  reframe("Piperacillin-tazobactam" = b_treat1,
+          Carbapenem = b_treat1 + `b_treat1:comparator_groupCarbapenem`,
+          "Cefotaxime/Ceftriaxone" = b_treat1 + `b_treat1:comparator_groupCefotaximeDCeftriaxone`,
+          Ceftazidime = b_treat1 + `b_treat1:comparator_groupCeftazidime`)  |> 
+  pivot_longer(everything()) |> 
+  # Add overall model draws
+  bind_rows(overall_draws) |> 
+  mutate(name = fct_relevel(name, levels(comparator_overall_n_studies$name)))
+
+comparator_labels = 
+  comparator_draws |> 
+  group_by(name) |> 
+  median_hdi(value) |> 
+  mutate(across(value:.upper, ~exp(.) |> round(2))) |> 
+  mutate(estimate = str_c(value, " [", .lower, ", ", .upper, "]"))
+  
+
+comparator_prob = 
+  comparator_draws |> 
+  group_by(name) |> 
+  reframe(prOR = (mean(value > log(1))*100) |> round(1))  
+
+comparator_draws |> 
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  geom_vline(xintercept = c(subset(comparator_labels, name == "Overall")$.lower |> log(),
+                            subset(comparator_labels, name == "Overall")$.upper |> log()),
+             linetype = 2, linewidth = 0.3) +
+  scale_fill_manual(values=c(met.brewer("OKeeffe2", 5) )) +
+  
+  geom_text(
+    data = data.frame(
+      name = "Overall",
+      label = "N of\nStudies",  
+      x = log(0.35) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = comparator_overall_n_studies$name,
+      label = comparator_overall_n_studies$n,  
+      x = log(0.35)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0  # Slight vertical nudge to align with distributions
+  ) +
+  
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "OR [95% CrI]",  
+      x = log(4.5) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = comparator_labels$name,
+      label = comparator_labels$estimate,  
+      x = log(4.5)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "Probability (%)\nof Any Harm, OR > 1",  
+      x = log(22) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.9  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = comparator_prob$name,
+      label = comparator_prob$prOR,  
+      x = log(22)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  scale_x_continuous(
+    breaks = c(0.5, 1,  2) |> log(),
+    labels = function(x) exp(x)
+  ) +
+  coord_cartesian(x = c(0.3, 40) |> log(),
+                  y = c(1, comparator_labels |> nrow() + 0.7))  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+## Population
+
+```{r}
+# Count number of studies
+population_n_studies =  
+  long_data |> 
+  filter(group == "com") |> 
+  count(population) |> 
+  rename(name = "population") |> 
+  mutate(n = as.numeric(n),
+         name = as.character(name))
+
+population_overall_n_studies =
+  population_n_studies |> 
+  bind_rows(
+    tibble(name = "Overall", n = overall_mod$data$study |> unique() |> length())
+  ) |> 
+  mutate(name = fct_reorder(name, n))
+
+
+# Get draws from the overall model
+
+overall_draws = 
+  overall_mod |>
+  tidy_draws() |> 
+  select(b_treat1) |> 
+  mutate(name = "Overall") |> 
+  rename("value" = b_treat1)
+
+# Get draws from the subgroup model
+population_draws = 
+  population_mod |> 
+  tidy_draws() |> 
+  reframe("Adults" = b_treat1,
+          Pediatrics = b_treat1 + `b_treat1:populationPediatrics`)  |> 
+  pivot_longer(everything()) |> 
+  # Add overall model draws
+  bind_rows(overall_draws) |> 
+  mutate(name = fct_relevel(name, levels(population_overall_n_studies$name)))
+
+population_labels = 
+  population_draws |> 
+  group_by(name) |> 
+  median_hdi(value) |> 
+  mutate(across(value:.upper, ~exp(.) |> round(2))) |> 
+  mutate(estimate = str_c(value, " [", .lower, ", ", .upper, "]"))
+
+population_prob = 
+  population_draws |> 
+  group_by(name) |> 
+  reframe(prOR = (mean(value > log(1))*100) |> round(1))  
+
+
+
+population_draws |> 
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  geom_vline(xintercept = c(subset(population_labels, name == "Overall")$.lower |> log(),
+                            subset(population_labels, name == "Overall")$.upper |> log()),
+             linetype = 2, linewidth = 0.3) +
+  scale_fill_manual(values=c(met.brewer("OKeeffe2", 3) )) +
+  
+  geom_text(
+    data = data.frame(
+      name = "Overall",
+      label = "N of\nStudies",  
+      x = log(0.35) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = population_overall_n_studies$name,
+      label = population_overall_n_studies$n,  
+      x = log(0.35)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0  # Slight vertical nudge to align with distributions
+  ) +
+  
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "OR [95% CrI]",  
+      x = log(4.5) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = population_labels$name,
+      label = population_labels$estimate,  
+      x = log(4.5)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "Probability (%)\nof Any Harm, OR > 1",  
+      x = log(22) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.9  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = population_prob$name,
+      label = population_prob$prOR,  
+      x = log(22)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  scale_x_continuous(
+    breaks = c(0.5, 1,  2) |> log(),
+    labels = function(x) exp(x)
+  ) +
+  coord_cartesian(x = c(0.3, 40) |> log(),
+                  y = c(1, population_labels |> nrow() + 0.7))  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+## Cefepime Dose
+
+```{r}
+# Count number of studies
+cefdose_n_studies =  
+  long_data |> 
+  filter(group == "com") |> 
+  count(Cefepime_q12) |> 
+  filter(!is.na(Cefepime_q12)) |> 
+  rename(name = "Cefepime_q12") |> 
+  mutate(n = as.numeric(n),
+         name = as.character(name),
+         name = ifelse(name == "High","High Dose", "Low Dose"))
+
+cefdose_overall_n_studies =
+  cefdose_n_studies |> 
+  bind_rows(
+    tibble(name = "Overall", n = overall_mod$data$study |> unique() |> length())
+  ) |> 
+  mutate(name = fct_reorder(name, n))
+
+
+# Get draws from the overall model
+
+overall_draws = 
+  overall_mod |>
+  tidy_draws() |> 
+  select(b_treat1) |> 
+  mutate(name = "Overall") |> 
+  rename("value" = b_treat1)
+
+# Get draws from the subgroup model
+cefdose_draws = 
+  cefdose_mod |> 
+  tidy_draws() |> 
+  reframe("High Dose" = b_treat1,
+          "Low Dose" = b_treat1 + `b_treat1:Cefepime_q12Low`)  |> 
+  pivot_longer(everything()) |> 
+  # Add overall model draws
+  bind_rows(overall_draws) |> 
+  mutate(name = fct_relevel(name, levels(cefdose_overall_n_studies$name)))
+
+cefdose_labels = 
+  cefdose_draws |> 
+  group_by(name) |> 
+  median_hdi(value) |> 
+  mutate(across(value:.upper, ~exp(.) |> round(2))) |> 
+  mutate(estimate = str_c(value, " [", .lower, ", ", .upper, "]"))
+
+cefdose_prob = 
+  cefdose_draws |> 
+  group_by(name) |> 
+  reframe(prOR = (mean(value > log(1))*100) |> round(1))  
+
+
+
+cefdose_draws |> 
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  geom_vline(xintercept = c(subset(cefdose_labels, name == "Overall")$.lower |> log(),
+                            subset(cefdose_labels, name == "Overall")$.upper |> log()),
+             linetype = 2, linewidth = 0.3) +
+  scale_fill_manual(values=c(met.brewer("OKeeffe2",3) )) +
+  
+  geom_text(
+    data = data.frame(
+      name = "Overall",
+      label = "N of\nStudies",  
+      x = log(0.35) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = cefdose_overall_n_studies$name,
+      label = cefdose_overall_n_studies$n,  
+      x = log(0.35)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0  # Slight vertical nudge to align with distributions
+  ) +
+  
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "OR [95% CrI]",  
+      x = log(4.5) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = cefdose_labels$name,
+      label = cefdose_labels$estimate,  
+      x = log(4.5)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "Probability (%)\nof Any Harm, OR > 1",  
+      x = log(22) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.9  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = cefdose_prob$name,
+      label = cefdose_prob$prOR,  
+      x = log(22)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  scale_x_continuous(
+    breaks = c(0.5, 1,  2) |> log(),
+    labels = function(x) exp(x)
+  ) +
+  coord_cartesian(x = c(0.3, 40) |> log(),
+                  y = c(1, cefdose_labels |> nrow() + 0.7))  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+## Risk of Bias
+
+```{r}
+# Count number of studies
+rob_n_studies =  
+  long_data |> 
+  filter(group == "com") |> 
+  count(overall_rob) |> 
+  filter(!is.na(overall_rob)) |> 
+  rename(name = "overall_rob") |> 
+  mutate(n = as.numeric(n),
+         name = as.character(name))
+
+rob_overall_n_studies =
+  rob_n_studies |> 
+  bind_rows(
+    tibble(name = "Overall", n = overall_mod$data$study |> unique() |> length())
+  ) |> 
+  mutate(name = fct_reorder(name, n))
+
+
+# Get draws from the overall model
+
+overall_draws = 
+  overall_mod |>
+  tidy_draws() |> 
+  select(b_treat1) |> 
+  mutate(name = "Overall") |> 
+  rename("value" = b_treat1)
+
+# Get draws from the subgroup model
+rob_draws = 
+  rob_mod |> 
+  tidy_draws() |> 
+  reframe("Low" = b_treat1,
+          "Some concerns" = b_treat1 + `b_treat1:overall_robSomeconcerns`,
+          "High" = b_treat1 + `b_treat1:overall_robHigh`)  |> 
+  pivot_longer(everything()) |> 
+  # Add overall model draws
+  bind_rows(overall_draws) |> 
+  mutate(name = fct_relevel(name, levels(rob_overall_n_studies$name)))
+
+rob_labels = 
+  rob_draws |> 
+  group_by(name) |> 
+  median_hdi(value) |> 
+  mutate(across(value:.upper, ~exp(.) |> round(2))) |> 
+  mutate(estimate = str_c(value, " [", .lower, ", ", .upper, "]"))
+
+
+rob_prob = 
+  rob_draws |> 
+  group_by(name) |> 
+  reframe(prOR = (mean(value > log(1))*100) |> round(1))  
+
+rob_draws |> 
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  geom_vline(xintercept = c(subset(rob_labels, name == "Overall")$.lower |> log(),
+                            subset(rob_labels, name == "Overall")$.upper |> log()),
+             linetype = 2, linewidth = 0.3) +
+  scale_fill_manual(values=c(met.brewer("OKeeffe2", 4) )) +
+  
+  geom_text(
+    data = data.frame(
+      name = "Overall",
+      label = "N of\nStudies",  
+      x = log(0.35) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = rob_overall_n_studies$name,
+      label = rob_overall_n_studies$n,  
+      x = log(0.35)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0  # Slight vertical nudge to align with distributions
+  ) +
+  
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "OR [95% CrI]",  
+      x = log(4.5) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = rob_labels$name,
+      label = rob_labels$estimate,  
+      x = log(4.5)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "Probability (%)\nof Any Harm, OR > 1",  
+      x = log(22) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.9  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = rob_prob$name,
+      label = rob_prob$prOR,  
+      x = log(22)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  scale_x_continuous(
+    breaks = c(0.5, 1,  2) |> log(),
+    labels = function(x) exp(x)
+  ) +
+  coord_cartesian(x = c(0.3, 40) |> log(),
+                  y = c(1, rob_labels |> nrow() + 0.7))  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+## Published vs. Unpublished
+
+```{r}
+# Count number of studies
+publish_n_studies =  
+  long_data_publish |> 
+  filter(group == "com") |> 
+  count(publish) |> 
+  filter(!is.na(publish)) |> 
+  rename(name = "publish") |> 
+  mutate(n = as.numeric(n), 
+         name = as.character(name))
+
+publish_overall_n_studies =
+  publish_n_studies |> 
+  bind_rows(
+    tibble(name = "Overall", n = publish_overall_mod$data$study |> unique() |> length())
+  ) |> 
+  mutate(name = fct_reorder(name, n))
+
+
+# Get draws from the overall model
+
+publish_overall_draws = 
+  publish_overall_mod |>
+  tidy_draws() |> 
+  select(b_treat1) |> 
+  mutate(name = "Overall") |> 
+  rename("value" = b_treat1)
+
+# Get draws from the indication model
+publish_subgroup_draws = 
+  publish_subgroup_mod |> 
+  tidy_draws() |> 
+  reframe("Published" = b_treat1,
+          "Unpublished" = b_treat1 + `b_treat1:publishUnpublished`)  |> 
+  pivot_longer(everything()) |> 
+  # Add overall model draws
+  bind_rows(publish_overall_draws) |> 
+  mutate(name = fct_relevel(name, levels(publish_overall_n_studies$name)))
+
+publish_labels = 
+  publish_subgroup_draws |> 
+  group_by(name) |> 
+  median_hdi(value) |> 
+  mutate(across(value:.upper, ~exp(.) |> round(2))) |> 
+  mutate(estimate = str_c(value, " [", .lower, ", ", .upper, "]"))
+
+
+publish_prob = 
+  publish_subgroup_draws |> 
+  group_by(name) |> 
+  reframe(prOR = (mean(value > log(1))*100) |> round(1))  
+
+publish_subgroup_draws |> 
+  ggplot() +
+  aes(x = value, y = name, fill = name) +
+  stat_halfeye(.width = 0.95,
+               point_interval = median_hdi) +
+  geom_vline(xintercept = c(subset(publish_labels, name == "Overall")$.lower |> log(),
+                            subset(publish_labels, name == "Overall")$.upper |> log()),
+             linetype = 2, linewidth = 0.3) +
+  scale_fill_manual(values=c(met.brewer("OKeeffe2", 3) )) +
+  
+  geom_text(
+    data = data.frame(
+      name = "Overall",
+      label = "N of\nStudies",  
+      x = log(0.35) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = publish_overall_n_studies$name,
+      label = publish_overall_n_studies$n,  
+      x = log(0.35)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",
+    size = 3.8,
+    nudge_y = 0  # Slight vertical nudge to align with distributions
+  ) +
+  
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "OR [95% CrI]",  
+      x = log(4.5) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.8  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = publish_labels$name,
+      label = publish_labels$estimate,  
+      x = log(4.5)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = c("Overall"),
+      label = "Probability (%)\nof Any Harm, OR > 1",  
+      x = log(22) 
+    ),
+    aes(x = x, y = name, label = label),
+    fontface = "bold",
+    hjust = "middle", 
+    size = 3.8,
+    nudge_y = 0.9  # Slight vertical nudge to align with distributions
+  ) +
+  
+  geom_text(
+    data = data.frame(
+      name = publish_prob$name,
+      label = publish_prob$prOR,  
+      x = log(22)
+    ),
+    aes(x = x, y = name, label = label),
+    hjust = "middle",  
+    size = 3.8,
+    nudge_y = 0.2  # Slight vertical nudge to align with distributions
+  ) +
+  
+  scale_x_continuous(
+    breaks = c(0.5, 1,  2) |> log(),
+    labels = function(x) exp(x)
+  ) +
+  coord_cartesian(x = c(0.3, 40) |> log(),
+                  y = c(1, publish_labels |> nrow() + 0.7))  +
+  labs(x = "\nOdds Ratio (log scale)",
+       y = " ") +
+  theme(legend.position = "none",
+        axis.text.y = element_text(hjust = 1))
+```
+
+What is the probability that Published vs. Unpublished effects are different?
+
+```{r}
+publish_subgroup_mod |> 
+  tidy_draws() |> 
+  reframe(prob = mean(`b_treat1:publishUnpublished` < 0) * 100)
+```
+

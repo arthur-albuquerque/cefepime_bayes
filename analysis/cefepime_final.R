@@ -1,8 +1,13 @@
-rm(list=ls(all=TRUE)) 
-setwd("~/Desktop")
+if (!require("pacman")) install.packages("pacman")
+
+pacman::p_load(here,
+               rmeta,
+               meta,
+               bayesmeta,
+               brms)       
 
 ##META -ANALYSIS
-data= read.csv("cef_dataonly.csv", header=T)
+data= read.csv(here("data/cef_dataonly.csv"), header=T)
 data
 colnames(data)
 
@@ -13,15 +18,6 @@ data2 <- subset(data, Comparator != "Control")
 data3 <- subset(data, N_cef != "NA")#withsponsor
 data4 <- subset(data2, N_cef != "NA")#withoutsponsor
 
-install.packages("rmeta")
-library (rmeta)
-install.packages("meta")
-library(meta)
-
-install.packages("bayesmeta")
-library (bayesmeta)
-install.packages("brms")
-library(brms)
 
 #c = meta.MH(lowdose$N_cef, lowdose$N_com, lowdose$death_cef, lowdose$deaths_com, names=lowdose$Study.ID)
 #summary(c)
@@ -51,12 +47,12 @@ TP <- TurnerEtAlPrior("all-cause mortality", "pharma", "pharma")
 print(TP)
 
 result <- bayesmeta(y = df$yi,
-                          sigma = df$sei,
-                          tau.prior=TP$dprior,
-                          labels = df$Study.ID)
+                    sigma = df$sei,
+                    tau.prior=TP$dprior,
+                    labels = df$Study.ID)
 
-summary(result)
-head(result$summary)
+result
+result$summary
 
 # Extracting the necessary values for log RR (mu)
 logRR_mean <- result$summary["mean", "mu"]
@@ -88,7 +84,12 @@ meningitis <- (df$Intended.clinical.indication=="Meningitis")
 severebact <- (df$Intended.clinical.indication=="Severe bacterial infections")
 uti <- (df$Intended.clinical.indication=="UTI")
 other <- (df$Intended.clinical.indication=="Mixed")
-X <- cbind("Febrile neutropenia"=as.numeric(febneut), "Pneumonia"=as.numeric(pnuemonia), "Meningitis"=as.numeric(meningitis), "UTI"=as.numeric(uti), "Mixed"=as.numeric(other), "Severe bacterial infections"=as.numeric(severebact))
+X <- cbind("Febrile neutropenia"=as.numeric(febneut),
+           "Pneumonia"=as.numeric(pnuemonia),
+           "Meningitis"=as.numeric(meningitis),
+           "UTI"=as.numeric(uti),
+           "Mixed"=as.numeric(other),
+           "Severe bacterial infections"=as.numeric(severebact))
 
 bmr01 <- bmr(y=df$yi, sigma=sqrt(df$vi), X=X, labels = df$Study.ID)
 
@@ -96,7 +97,10 @@ carb <- (df$Comparator.group=="Carbapenem")
 ceft <- (df$Comparator.group=="Cefotaxime/Ceftriaxone")
 ceftaz <- (df$Comparator.group=="Ceftazidime")
 tazo <- (df$Comparator.group=="Piperacillin-tazobactam")
-X <- cbind("Carbapenem"=as.numeric(carb), "Cefotaxime/Ceftriaxone"=as.numeric(ceft), "Ceftazidime"=as.numeric(ceftaz), "Piperacillin-tazobactam"=as.numeric(tazo))
+X <- cbind("Carbapenem"=as.numeric(carb),
+           "Cefotaxime/Ceftriaxone"=as.numeric(ceft),
+           "Ceftazidime"=as.numeric(ceftaz),
+           "Piperacillin-tazobactam"=as.numeric(tazo))
 bmr02 <- bmr(y=df$yi, sigma=sqrt(df$vi), X=X, labels = df$Study.ID)
 
 adults <- (df$Patient.population=="Adults")
