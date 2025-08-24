@@ -10,8 +10,8 @@ format:
 # Packages
 
 ```{r}
-# Ensures the package "pacman" is installed
-if (!require("pacman")) install.packages("pacman")
+# Ensure exact package versions from renv.lock are used
+renv::restore(prompt = FALSE)
 
 ### Install/Load packages
 pacman::p_load(dplyr,
