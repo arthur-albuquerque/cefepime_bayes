@@ -22,7 +22,8 @@ pacman::p_load(dplyr,
                ggplot2,
                here,
                MetBrewer,
-               stringr)
+               stringr,
+               cmdstanr)
 
 color_scheme_set("red")
 
