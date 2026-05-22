@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Implementation Notes — in-analysis-analyse-expressive-turtle</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 { border-bottom: 2px solid #1B1B1B; padding-bottom: 0.3em; }
+        h2 { color: #1F4F8B; margin-top: 2em; }
+        code {
+            background: #f4f4f4;
+            padding: 0.15em 0.4em;
+            border-radius: 3px;
+            font-family: 'SF Mono', Menlo, monospace;
+            font-size: 0.9em;
+        }
+        .status-done { color: #2d6a2d; font-weight: 600; }
+        .status-blocked { color: #9B2D2D; font-weight: 600; }
+        .status-pending { color: #B8842B; font-weight: 600; }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 0.5em 0.8em;
+            text-align: left;
+        }
+        th { background: #f8f8f8; }
+    </style>
+</head>
+<body>
+
+<h1>Implementation Notes</h1>
+<p><strong>Plan:</strong> <code>in-analysis-analyse-expressive-turtle.md</code></p>
+<p><strong>Project:</strong> <code>/Users/arthur/Coding/projects/active/cefepime_bayes</code></p>
+<p><strong>Date:</strong> 2026-05-22</p>
+
+<h2>Execution Summary</h2>
+
+<table>
+<tr><th>Step</th><th>Status</th><th>Notes</th></tr>
+<tr>
+    <td>Step 1: Create <code>analysis/custom-theme.css</code></td>
+    <td class="status-done">Done</td>
+    <td>File created verbatim from plan spec. 271 lines.</td>
+</tr>
+<tr>
+    <td>Step 2: Update YAML in <code>01_models_fit_diagnostics.qmd</code></td>
+    <td class="status-done">Done</td>
+    <td>New title, subtitle, theme list, TOC, numbering, figure sizing, KaTeX math.</td>
+</tr>
+<tr>
+    <td>Step 3: Insert "Statistical Model" section</td>
+    <td class="status-done">Done</td>
+    <td>Inserted at line 117, before <code># Overall Model</code> (now at line 178). All LaTeX, table, and prose verbatim from plan.</td>
+</tr>
+<tr>
+    <td>Step 4: Update YAML in <code>02_results.qmd</code></td>
+    <td class="status-done">Done</td>
+    <td>Same theme and TOC config as Step 2; figure width/height set to 9×6 (slightly larger than Part I).</td>
+</tr>
+<tr>
+    <td>Step 5: Re-render both reports</td>
+    <td class="status-blocked">Blocked</td>
+    <td>Rendering failed due to renv / R environment issues on the executor machine (see <a href="#render-failure">Render Failure</a>).</td>
+</tr>
+<tr>
+    <td>Final verification (browser inspection)</td>
+    <td class="status-pending">Pending</td>
+    <td>Blocked on Step 5.</td>
+</tr>
+</table>
+
+<h2 id="render-failure">Render Failure</h2>
+
+<p>The <code>quarto render</code> commands failed with environment errors:</p>
+
+<ul>
+    <li><strong>01_models_fit_diagnostics.qmd:</strong> <code>renv::restore()</code> failed because of a missing lockfile / 00LOCK-renv issue during renv bootstrapping.</li>
+    <li><strong>02_results.qmd:</strong> <code>rmarkdown</code> and <code>knitr</code> packages were not available in the R installation.</li>
+</ul>
+
+<p><strong>Action taken:</strong> Per plan constraints, I did NOT attempt to install packages, modify <code>renv</code>, or change the <code>.Rprofile</code>. I stopped and reported.</p>
+
+<p><strong>Recommended next step:</strong> Run <code>quarto render</code> from a machine with the project's R environment already set up (i.e., where the existing HTML files were originally rendered).</p>
+
+<h2>Design Decisions</h2>
+
+<p>None required — the plan was fully prescriptive. All content (CSS, YAML, LaTeX prose) was copied verbatim.</p>
+
+<h2>Deviations from Spec</h2>
+
+<p>None. All changes match the plan exactly.</p>
+
+<h2>Tradeoffs</h2>
+
+<p>None.</p>
+
+<h2>Open Questions</h2>
+
+<ul>
+    <li>Will the warm cream background render correctly with <code>theme: [cosmo, custom-theme.css]</code> on the user's machine? (The <code>body.quarto-light</code> selector should cover it, but Quarto's dark-mode toggle could override. If dark mode appears, we may need to add <code>body.quarto-dark</code> rules or disable dark mode in YAML.)</li>
+    <li>Are the figure dimensions (8×5 for Part I, 9×6 for Part II) appropriate for the actual figure content, or will any ggplot objects need adjustment?</li>
+</ul>
+
+<h2>Files Changed</h2>
+
+<ul>
+    <li><code>analysis/custom-theme.css</code> — <strong>new</strong></li>
+    <li><code>analysis/01_models_fit_diagnostics.qmd</code> — YAML header + inserted "Statistical Model" section (lines 117–177)</li>
+    <li><code>analysis/02_results.qmd</code> — YAML header only</li>
+</ul>
+
+<p><em>All code chunks, model fitting calls, priors, and plot code were left untouched per plan constraints.</em></p>
+
+</body>
+</html>

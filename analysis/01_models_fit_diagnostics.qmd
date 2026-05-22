@@ -1,18 +1,30 @@
 ---
-title: "Model Fitting and Diagnostics"
+title: "Cefepime Bayesian Meta-Analysis"
+subtitle: "Part I — Model Specification, Fit & Diagnostics"
 format:
   html:
+    theme: cosmo
+    css: custom-theme.css
     embed-resources: true
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    toc-title: "Contents"
+    number-sections: true
+    number-depth: 3
     code-fold: true
     code-tools: true
+    code-overflow: wrap
+    fig-align: center
+    fig-width: 8
+    fig-height: 5
+    fig-dpi: 150
+    html-math-method: katex
 ---
 
 # Packages
 
 ```{r}
-# Ensure exact package versions from renv.lock are used
-renv::restore(prompt = FALSE)
-
 ### Install/Load packages
 pacman::p_load(dplyr,
                tidyr,
@@ -97,8 +109,86 @@ long_data =
                               levels = c("Low",
                                          "Some concerns",
                                          "High"))
-         )
+          )
 ```
+
+# Statistical Model
+
+All analyses use a Bayesian binomial random-effects meta-analysis fit with `brms` via `cmdstanr`. We follow Model 4 of Jackson, Law, Stijnen, Viechtbauer & White (2018) [doi:10.1002/sim.7588](https://doi.org/10.1002/sim.7588), which models the treatment effect as a random deviation from a trial-specific baseline.
+
+## Likelihood and linear predictor
+
+The model has three pieces. Each trial contributes a **control arm** and a **cefepime arm**, and the number of deaths in each arm is modelled as binomial. The log-odds of death in arm $j$ of trial $i$ are built from (1) a **trial-specific baseline** $\alpha_i$ that absorbs how sick that trial's population is at baseline, (2) a **pooled treatment effect** $\theta$ — the quantity we want to estimate, and (3) a **trial-level deviation** $u_i$ that lets the true treatment effect vary across trials. The standard deviation $\tau$ of those deviations measures between-trial heterogeneity.
+
+For trial $i$ and arm $j \in \{C, T\}$, with $y_{ij}$ deaths among $N_{ij}$ participants:
+
+$$
+y_{ij} \sim \text{Binomial}(N_{ij},\,p_{ij})
+$$
+
+$$
+\operatorname{logit}(p_{ij}) \;=\; \alpha_i \;+\; \theta\, T_{ij} \;+\; u_i\, z_{ij}
+$$
+
+Corresponding `brms` formula:
+
+```r
+bf(death | trials(N) ~ 1 + study + treat + (treat12 - 1 | study))
+```
+
+where
+
+- $\alpha_i$ — baseline (control-arm) log-odds of death in trial $i$, estimated separately for each trial (no normality assumption is imposed on baselines across trials);
+- $\theta$ — pooled treatment log-odds ratio (primary estimand);
+- $T_{ij} \in \{0,1\}$ — treatment indicator (0 = control, 1 = cefepime);
+- $u_i \sim \mathcal N(0,\,\tau^2)$ — trial-specific deviation in the treatment effect, so trial $i$'s true log-odds ratio is $\theta + u_i$;
+- $z_{ij} = -0.5$ for control, $+0.5$ for cefepime — contrast coding that keeps the random deviation symmetric around the baseline (Model 4 of Jackson et al.);
+- $\tau$ — between-trial heterogeneity in the treatment effect.
+
+## Priors
+
+$$
+\alpha_i \sim \mathcal{N}(0,\,1.5^2), \qquad
+\theta \sim \mathcal{N}(0,\,0.82^2), \qquad
+\tau \sim \text{Log-Normal}(-2.09,\,0.705^2).
+$$
+
+The prior on $\tau$ is the informative all-cause-mortality, pharma-vs-pharma prior of Turner et al., obtained via `bayesmeta::TurnerEtAlPrior("all-cause mortality", "pharma", "pharma")`.
+
+## Subgroup meta-regressions
+
+To check whether the treatment effect varies by a trial-level feature (e.g. clinical indication, comparator drug), we extend the model with an interaction between treatment and the subgroup variable. The logic is the same — one pooled effect, one heterogeneity term — but now the pooled effect is decomposed: $\theta$ is the treatment effect in the **reference subgroup**, and $\delta_k$ is how much the treatment effect **shifts** in subgroup $k$. So subgroup $k$'s treatment effect is $\theta + \delta_k$. A separate parameter $\gamma_k$ shifts the baseline log-odds for subgroup $k$, so the model doesn't confuse "this subgroup has a different underlying risk" with "this subgroup responds differently to treatment".
+
+For trial $i$ in subgroup level $k \in \{1, \dots, K\}$ (with $k = 1$ the reference):
+
+$$
+\operatorname{logit}(p_{ij}) \;=\; \alpha_i \;+\; \theta\, T_{ij} \;+\; \sum_{k=2}^{K}\!\left(\gamma_k \;+\; \delta_k\, T_{ij}\right) s_{ik} \;+\; u_i\, z_{ij},
+$$
+
+Corresponding `brms` formula (with `indication` as the example subgroup):
+
+```r
+bf(death | trials(N) ~ 1 + study + treat * indication + (treat12 - 1 | study))
+```
+
+where $s_{ik} = 1$ if trial $i$ belongs to subgroup level $k$ (and 0 otherwise), with $\delta_1 \equiv 0$. Priors: $\gamma_k \sim \mathcal N(0,\,1.2^2)$ on subgroup baseline shifts, and $\delta_k \sim \mathcal N(0,\,0.3^2)$ — a regularising prior that pulls subgroup-specific treatment effects toward the pooled estimate unless the data argue otherwise.
+
+**One model is fit per subgroup variable.** The six subgroup analyses are:
+
+| Subgroup variable | Levels (reference first) |
+|---|---|
+| Clinical indication | Febrile neutropenia, Pneumonia, Severe bacterial infections, UTI, Meningitis, Mixed |
+| Comparator group | Piperacillin–tazobactam, Carbapenem, Cefotaxime/Ceftriaxone, Ceftazidime |
+| Patient population | Adults, Pediatrics |
+| Cefepime dose (q12h) | High, Low |
+| Overall risk of bias | Low, Some concerns, High |
+| Publication status | Published, Unpublished |
+
+The *Published vs. Unpublished* analysis uses an expanded dataset that includes the unpublished sponsor-held trials (these are excluded from the primary analyses).
+
+## Sampling
+
+All models are fit with 4 chains × 10 000 iterations (5 000 warmup), `adapt_delta = 0.95`, seed `123`. Convergence is checked per model via $\hat R$, effective sample size, trace plots, autocorrelation, and posterior density inspection in the sections that follow.
 
 # Overall Model
 
@@ -114,7 +204,8 @@ mf =
 Priors
 
 ```{r}
-get_prior(mf, family = binomial, data = long_data)
+#| output: false
+# get_prior(mf, family = binomial, data = long_data)
 ```
 
 
@@ -277,7 +368,7 @@ Model formula
 mf_indication = 
   bf(death | trials(N) ~ 1 + study + treat*indication + (treat12 - 1 | study))
 
-get_prior(mf_indication, data = long_data, family = binomial)
+# # get_prior(mf_indication, data = long_data, family = binomial)
 ```
 
 Priors
@@ -472,7 +563,8 @@ Model formula
 mf_comparator = 
   bf(death | trials(N) ~ 1 + study + treat*comparator_group + (treat12 - 1 | study))
 
-get_prior(mf_comparator, data = long_data, family = binomial)
+#| output: false
+# get_prior(mf_comparator, data = long_data, family = binomial)
 ```
 
 Priors
@@ -651,8 +743,7 @@ Model formula
 # Formula with meta-regression
 mf_population = 
   bf(death | trials(N) ~ 1 + study + treat*population + (treat12 - 1 | study))
-
-get_prior(mf_population, data = long_data, family = binomial)
+# get_prior(mf_population, data = long_data, family = binomial)
 ```
 
 Priors
@@ -820,7 +911,8 @@ Model formula
 mf_cefdose = 
   bf(death | trials(N) ~ 1 + study + treat*Cefepime_q12 + (treat12 - 1 | study))
 
-get_prior(mf_cefdose, data = long_data, family = binomial)
+#| output: false
+# get_prior(mf_cefdose, data = long_data, family = binomial)
 ```
 
 Priors
@@ -997,7 +1089,8 @@ Model formula
 mf_rob = 
   bf(death | trials(N) ~ 1 + study + treat*overall_rob + (treat12 - 1 | study))
 
-get_prior(mf_rob, data = long_data, family = binomial)
+#| output: false
+# get_prior(mf_rob, data = long_data, family = binomial)
 ```
 
 Priors
@@ -1219,7 +1312,8 @@ mf =
 Priors
 
 ```{r}
-get_prior(mf, family = binomial, data = long_data_publish)
+#| output: false
+# get_prior(mf, family = binomial, data = long_data_publish)
 ```
 
 
@@ -1380,7 +1474,8 @@ Model formula
 mf_publish = 
   bf(death | trials(N) ~ 1 + study + treat*publish + (treat12 - 1 | study))
 
-get_prior(mf_publish, data = long_data_publish, family = binomial)
+#| output: false
+# get_prior(mf_publish, data = long_data_publish, family = binomial)
 ```
 
 Priors

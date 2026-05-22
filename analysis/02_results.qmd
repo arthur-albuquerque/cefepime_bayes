@@ -1,18 +1,30 @@
 ---
-title: "Subgroup Figures"
+title: "Cefepime Bayesian Meta-Analysis"
+subtitle: "Part II — Overall and Subgroup Results"
 format:
   html:
+    theme: cosmo
+    css: custom-theme.css
     embed-resources: true
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    toc-title: "Contents"
+    number-sections: true
+    number-depth: 3
     code-fold: true
     code-tools: true
+    code-overflow: wrap
+    fig-align: center
+    fig-width: 9
+    fig-height: 6
+    fig-dpi: 150
+    html-math-method: katex
 ---
 
 # Packages
 
 ```{r}
-# Ensure exact package versions from renv.lock are used
-renv::restore(prompt = FALSE)
-
 ### Install/Load packages
 pacman::p_load(dplyr,
                tidyr,
@@ -1080,4 +1092,3 @@ publish_subgroup_mod |>
   tidy_draws() |> 
   reframe(prob = mean(`b_treat1:publishUnpublished` < 0) * 100)
 ```
-
