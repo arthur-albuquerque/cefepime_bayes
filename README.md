@@ -1,5 +1,3 @@
-# Cefepime Bayesian Meta-Analysis
-
 ## Cefepime and Mortality: A Systematic Review and Bayesian Meta-Analysis
 
 Zahra N. Sohani, MD, PhD; You Jia Zhong, MD; Avideh Afshar, MD; Bander A. Assiri, PharmD; Genevieve Gore, MLIS; Matthew P. Cheng, MD, MSc; Anthony Lieu, MD; Jordana Serero, MD; Fergus Hamilton, PhD; Alexander Lawandi, MD, MSc; Mical Paul, MD; Dafna Yahav, MD; **Arthur M. Albuquerque, MD**; Guillaume Butler-Laporte, MD, MSc; Emily G. McDonald, MD, MSc; Todd C. Lee, MD, MPH
